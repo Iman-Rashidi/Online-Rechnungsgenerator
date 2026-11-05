@@ -44,7 +44,9 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:25px}
 <div class="field"><label for="number">Rechnungsnummer</label><input id="number" value="RE-2026-001"></div>
 <div class="field"><label for="date">Rechnungsdatum</label><input id="date" type="date"></div>
 <div class="field"><label for="due">Fällig am</label><input id="due" type="date"></div>
+<div class="field"><label for="taxRate">Umsatzsteuer</label><select id="taxRate"><option value="19">19 % (Regelsteuersatz)</option><option value="7">7 % (ermäßigt)</option><option value="0">0 % (nur wenn anwendbar)</option><option value="none">Keine Umsatzsteuer (§ 19 / steuerfrei)</option></select></div>
 </div>
+<p class="sub">Alle Positionspreise werden als Nettopreise eingegeben. Netto, Umsatzsteuer und Brutto werden automatisch berechnet.</p>
 <h2>Positionen</h2>
 <div class="items-head"><span>Beschreibung</span><span>Menge</span><span>Preis (€)</span><span></span></div>
 <div id="items"></div><button class="secondary" id="add" type="button">+ Position hinzufügen</button>
@@ -56,7 +58,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:25px}
 <div class="addresses"><div><strong>Rechnung an</strong><div id="pCustomer">Kundenname</div><div class="muted" id="pCustomerAddress"></div></div><div><strong>Absender</strong><div id="pSellerAddress" class="muted">Deine Anschrift</div></div></div>
 <div class="meta"><div><strong>Rechnungsnummer</strong><span id="pNumber">RE-2026-001</span></div><div><strong>Rechnungsdatum</strong><span id="pDate">-</span></div><div><strong>Fälligkeitsdatum</strong><span id="pDue">-</span></div></div>
 <table><thead><tr><th>Beschreibung</th><th class="num">Menge</th><th class="num">Einzelpreis</th><th class="num">Betrag</th></tr></thead><tbody id="pRows"><tr><td>Leistung</td><td class="num">1</td><td class="num">0,00 €</td><td class="num">0,00 €</td></tr></tbody></table>
-<div class="total"><div class="grand"><span>Gesamtbetrag</span><span id="pTotal">0,00 €</span></div></div>
+<div class="total"><div><span>Nettosumme</span><strong id="pNet">0,00 €</strong></div><div><span id="pTaxLabel">Umsatzsteuer (19 %)</span><strong id="pTax">0,00 €</strong></div><div class="grand"><span>Bruttosumme</span><span id="pTotal">0,00 €</span></div></div>
 <div class="note" id="pNote">Vielen Dank für Ihren Auftrag.</div>
 </section>
 </main><footer>Rechnio · Ein einfaches Werkzeug zur Rechnungserstellung</footer>
@@ -66,8 +68,8 @@ const money=n=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).
 function addItem(desc='',qty=1,price=0){const row=document.createElement('div');row.className='item';row.innerHTML='<input aria-label="Beschreibung" class="desc" placeholder="z. B. Webdesign"><input aria-label="Menge" class="qty" type="number" min="0" step="any" value="'+qty+'"><input aria-label="Einzelpreis in Euro" class="price" type="number" min="0" step="0.01" value="'+price+'"><button class="remove" type="button" aria-label="Position entfernen">×</button>';row.querySelector('.desc').value=desc;row.addEventListener('input',render);row.querySelector('.remove').addEventListener('click',()=>{row.remove();render()});$('items').append(row);render()}
 function dateFmt(v){if(!v)return '-';const [y,m,d]=v.split('-');return d+'.'+m+'.'+y}
 function render(){fields.forEach(id=>{const target=({seller:'pSeller',email:'pEmail',sellerAddress:'pSellerAddress',customer:'pCustomer',customerAddress:'pCustomerAddress',number:'pNumber',date:'pDate',due:'pDue',note:'pNote'})[id];const el=$(target);if(id==='date'||id==='due')el.textContent=dateFmt($(id).value);else el.textContent=$(id).value||({seller:'Dein Name oder Unternehmen',customer:'Kundenname',sellerAddress:'Deine Anschrift',note:'Vielen Dank für Ihren Auftrag.'}[id]||'')});
-let sum=0;$('pRows').innerHTML='';document.querySelectorAll('.item').forEach(r=>{const desc=r.querySelector('.desc').value||'Position';const q=Math.max(0,Number(r.querySelector('.qty').value)||0),p=Math.max(0,Number(r.querySelector('.price').value)||0),total=q*p;sum+=total;const tr=document.createElement('tr');[desc,String(q),money(p),money(total)].forEach((v,i)=>{const td=document.createElement('td');td.textContent=v;if(i)td.className='num';tr.append(td)});$('pRows').append(tr)});$('pTotal').textContent=money(sum)}
-fields.forEach(id=>$(id).addEventListener('input',render));$('add').addEventListener('click',()=>addItem());$('print').addEventListener('click',()=>window.print());$('reset').addEventListener('click',()=>{fields.forEach(id=>$(id).value='');$('number').value='RE-2026-001';$('items').innerHTML='';addItem();render()});
+let net=0;$('pRows').innerHTML='';document.querySelectorAll('.item').forEach(r=>{const desc=r.querySelector('.desc').value||'Position';const q=Math.max(0,Number(r.querySelector('.qty').value)||0),p=Math.max(0,Number(r.querySelector('.price').value)||0),line=q*p;net+=line;const tr=document.createElement('tr');[desc,String(q),money(p),money(line)].forEach((v,i)=>{const td=document.createElement('td');td.textContent=v;if(i)td.className='num';tr.append(td)});$('pRows').append(tr)});const choice=$('taxRate').value,rate=choice==='none'?0:Number(choice),tax=net*rate/100,gross=net+tax;$('pNet').textContent=money(net);$('pTax').textContent=money(tax);$('pTotal').textContent=money(gross);$('pTaxLabel').textContent=choice==='none'?'Umsatzsteuer (nicht ausgewiesen)':'Umsatzsteuer ('+rate+' %)';}
+fields.forEach(id=>$(id).addEventListener('input',render));$('taxRate').addEventListener('change',render);$('add').addEventListener('click',()=>addItem());$('print').addEventListener('click',()=>window.print());$('reset').addEventListener('click',()=>{fields.forEach(id=>$(id).value='');$('number').value='RE-2026-001';$('taxRate').value='19';$('items').innerHTML='';addItem();render()});
 $('date').value=new Date().toISOString().slice(0,10);addItem('Leistung',1,0);render();
 </script>
 </body></html>
