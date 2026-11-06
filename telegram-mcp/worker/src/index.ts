@@ -174,7 +174,7 @@ export default {
       return Response.json({
         ok: true,
         service: "rechnio-telegram-mcp",
-        mcp_auth_configured: accessToken.length >= MIN_ACCESS_TOKEN_LENGTH,
+        mcp_auth_configured: Boolean(accessToken),
         telegram_configured: Boolean(botToken)
       });
     }
@@ -194,7 +194,7 @@ export default {
       }));
     }
 
-    if (accessToken.length < MIN_ACCESS_TOKEN_LENGTH) {
+    if (!accessToken) {
       return withCors(new Response("MCP access token is not configured correctly", { status: 503 }));
     }
 
