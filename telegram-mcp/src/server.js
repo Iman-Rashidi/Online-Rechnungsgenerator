@@ -102,7 +102,7 @@ async function processInvoice(chatId, payload) {
     }
   } catch (error) {
     console.error("Notion save failed:", error instanceof Error ? error.message : "Unknown error");
-    await reply(chatId, "PDF wurde gesendet, aber das Speichern in Notion ist fehlgeschlagen. Grund: " + String(error.message || "خطای نامشخص").slice(0, 300));
+    await reply(chatId, "PDF wurde gesendet, aber das Speichern in Notion ist fehlgeschlagen. Grund: " + String(error.message || "Unbekannter Fehler.").slice(0, 300));
   }
 }
 
@@ -197,7 +197,7 @@ app.post("/telegram/webhook", async (req, res) => {
   } catch (error) {
     console.error("Telegram update failed:", error instanceof Error ? error.message : "Unknown error");
     try {
-      await reply(chat.id, "Der Vorgang ist fehlgeschlagen: " + String(error.message || "خطای نامشخص").slice(0, 300));
+      await reply(chat.id, "Der Vorgang ist fehlgeschlagen: " + String(error.message || "Unbekannter Fehler.").slice(0, 300));
       processed.add(updateId);
       await saveState();
       res.sendStatus(200);
