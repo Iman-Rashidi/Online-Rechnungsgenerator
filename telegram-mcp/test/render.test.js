@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdir, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { renderInvoicePdf } from "../src/invoice.js";
 
 test("renders invoice and Mahnung PDFs using the existing Rechnio page", async () => {
@@ -22,6 +24,9 @@ test("renders invoice and Mahnung PDFs using the existing Rechnio page", async (
 
   const invoice = await renderInvoicePdf(base);
   assert.ok(invoice.pdf.subarray(0, 5).toString("ascii") === "%PDF-");
+  const artifactsDir = resolve(process.cwd(), "artifacts");
+  await mkdir(artifactsDir, { recursive: true });
+  await writeFile(resolve(artifactsDir, "rechnio-demo-invoice.pdf"), invoice.pdf);
   assert.deepEqual(invoice.totals, { net: 25, tax: 4.75, gross: 29.75 });
   assert.equal(invoice.documentType, "invoice");
 
@@ -36,6 +41,7 @@ test("renders invoice and Mahnung PDFs using the existing Rechnio page", async (
     template: "compact"
   });
   assert.ok(reminder.pdf.subarray(0, 5).toString("ascii") === "%PDF-");
+  await writeFile(resolve(artifactsDir, "rechnio-demo-mahnung.pdf"), reminder.pdf);
   assert.deepEqual(reminder.totals, { net: 25, tax: 4.75, gross: 34.75 });
   assert.equal(reminder.documentType, "mahnung");
 });
