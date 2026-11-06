@@ -1,0 +1,74 @@
+name: Rechnio Telegram bot polling
+
+on:
+  schedule:
+    # GitHub schedules can be delayed under load; avoid the top of the hour.
+    - cron: "3/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: rechnio-telegram-polling
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  poll:
+    if: ${{ vars.RECHNIO_TELEGRAM_POLLING_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: telegram-mcp
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
+      NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+      NOTION_DATA_SOURCE_ID: ${{ vars.NOTION_DATA_SOURCE_ID }}
+      STATE_FILE: data/telegram-updates.json
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: rechnio-telegram-npm-${{ runner.os }}-${{ hashFiles('telegram-mcp/package.json') }}
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: rechnio-playwright-${{ runner.os }}-chromium-${{ hashFiles('telegram-mcp/package.json') }}
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Restore Telegram update offset
+        uses: actions/cache/restore@v4
+        with:
+          path: telegram-mcp/data
+          key: rechnio-telegram-state-${{ github.run_id }}
+          restore-keys: |
+            rechnio-telegram-state-
+
+      - name: Run one Telegram polling cycle
+        run: node src/poll.js
+
+      - name: Save Telegram update offset
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: telegram-mcp/data
+          key: rechnio-telegram-state-${{ github.run_id }}
