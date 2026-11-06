@@ -74,25 +74,22 @@ Zugangsdaten ausschließlich in GitHub Secrets oder im Secret Manager des jeweil
 
 ## Telegram-Bot ohne eigenen Server (GitHub Actions)
 
-Der Bot kann alternativ ohne dauerhaft laufenden Node.js-Host betrieben werden. GitHub Actions fragt Telegram alle fünf Minuten ab, erstellt PDFs mit Chromium, sendet sie an den freigegebenen privaten Telegram-Chat und aktualisiert Notion. GitHub kann geplante Läufe bei hoher Auslastung verzögern; dies ist daher kein Echtzeit-Webhook.
+Der Bot kann ohne dauerhaft laufenden Node.js-Host betrieben werden. GitHub Actions prüft Telegram ungefähr alle fünf Minuten, erstellt PDFs mit Chromium aus der bestehenden Rechnio-Seite, sendet sie an den freigegebenen privaten Telegram-Chat und aktualisiert Notion. Geplante GitHub-Läufe können bei hoher Auslastung verspätet starten; der Bot arbeitet daher nicht sekundengenau.
 
 ### Einmalige Einrichtung durch den Repository-Eigentümer oder eine erziehungsberechtigte Person
 
-In den Repository-Einstellungen unter **Settings → Secrets and variables → Actions** folgende Werte hinzufügen:
+In den Repository-Einstellungen unter **Settings → Secrets and variables → Actions** müssen nur diese drei **Repository secrets** hinterlegt werden:
 
-**Repository secrets**
-- `TELEGRAM_BOT_TOKEN`: Token des Telegram-Bots.
+- `TELEGRAM_BOT_TOKEN`: Token des eigenen Telegram-Bots.
 - `TELEGRAM_ALLOWED_USER_IDS`: numerische Telegram-Benutzer-ID(s), bei mehreren kommasepariert.
 - `NOTION_API_KEY`: Notion-Integrationsschlüssel.
 
-**Repository variable**
-- `NOTION_DATA_SOURCE_ID`: `b2685397-3058-4bde-b9ef-4e51c8d63aa2`.
+Die Notion-Integration muss ausdrücklich Zugriff auf die Rechnio-Datenquelle erhalten. Die Datenquellen-ID ist bereits im Workflow eingetragen. Zugangsdaten ausschließlich als GitHub Secrets speichern, niemals in Chat, Quellcode oder Screenshots veröffentlichen.
 
-Die Notion-Integration muss ausdrücklich Zugriff auf die Rechnio-Datenquelle erhalten. Tokens gehören ausschließlich in GitHub Secrets, niemals in Chat, Quellcode oder Screenshots.
+Sobald alle drei Secrets vorhanden sind, erkennt der Workflow dies automatisch und startet beim nächsten Zeitplan. Es ist keine zusätzliche Repository-Variable oder manuelle Aktivierung nötig. Ein manueller Test ist über **Actions → Rechnio Telegram bot polling → Run workflow** möglich. Solange Secrets fehlen, prüft GitHub nur deren Vorhandensein, zeigt ausschließlich die fehlenden Namen an und überspringt den Bot-Lauf. Secret-Werte werden niemals ausgegeben.
 
-Danach die Repository-Variable `RECHNIO_TELEGRAM_POLLING_ENABLED` auf `true` setzen. Der Workflow **Rechnio Telegram bot polling** läuft dann automatisch alle fünf Minuten. Ein manueller Test ist über **Actions → Rechnio Telegram bot polling → Run workflow** möglich.
+Der Workflow speichert nur die numerische Telegram-Update-ID im GitHub Actions Cache; keine Zugangsdaten oder PDF-Rechnungen werden dort abgelegt. Der Bot reagiert ausschließlich auf private Chats von explizit freigegebenen Benutzer-IDs.
 
-Der Workflow ist standardmäßig deaktiviert, bis diese Variable auf `true` gesetzt wird. Dadurch entstehen keine fehlgeschlagenen Läufe, solange die Secrets noch nicht eingetragen sind. Der GitHub Actions Cache speichert ausschließlich die numerische Telegram-Update-ID; keine Zugangsdaten oder Rechnungs-PDFs werden dort abgelegt.
 
 ## Bereitstellung des alternativen Webhook-/MCP-Servers
 
@@ -106,4 +103,4 @@ Nach der Bereitstellung den Webhook einmalig über einen authentifizierten POST-
 
 ## Produktionsstatus
 
-Der GitHub-Actions-Polling-Modus benötigt keinen dauerhaft laufenden Node.js-Host. Er bleibt deaktiviert, bis der Repository-Eigentümer die erforderlichen GitHub Secrets und Variablen hinterlegt und `RECHNIO_TELEGRAM_POLLING_ENABLED=true` setzt. Erst danach kann ein echter Telegram-zu-PDF-zu-Notion-End-to-End-Test stattfinden. Der alternative Webhook-Modus in `src/server.js` benötigt weiterhin einen Node.js-Host mit Chromium und dauerhaftem Speicher.
+Der GitHub-Actions-Polling-Modus benötigt keinen dauerhaft laufenden Node.js-Host. Er startet automatisch, sobald die drei beschriebenen Repository Secrets hinterlegt sind. Bis zum ersten echten Telegram-zu-PDF-zu-Notion-End-to-End-Test bleibt die Produktionsverbindung unbestätigt. Der alternative Webhook-Modus in `src/server.js` benötigt weiterhin einen Node.js-Host mit Chromium und dauerhaftem Speicher.
