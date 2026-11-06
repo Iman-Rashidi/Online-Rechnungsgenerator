@@ -1,9 +1,20 @@
 {
   "name": "rechnio-telegram-mcp",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node src/server.js", "dev": "node --watch src/server.js" },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test",
+    "postinstall": "playwright install chromium"
+  },
   "engines": { "node": ">=20" },
-  "dependencies": { "@modelcontextprotocol/sdk": "^1.12.1", "dotenv": "^16.4.7", "express": "^5.1.0", "zod": "^3.25.0" }
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "playwright": "^1.55.0",
+    "zod": "^3.25.0"
+  }
 }

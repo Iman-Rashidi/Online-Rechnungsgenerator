@@ -1,0 +1,40 @@
+name: Telegram service tests
+
+on:
+  pull_request:
+    paths:
+      - "telegram-mcp/**"
+      - ".github/workflows/telegram-tests.yml"
+  push:
+    branches:
+      - main
+      - feature/telegram-invoice-pipeline
+    paths:
+      - "telegram-mcp/**"
+      - ".github/workflows/telegram-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telegram-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Node dependencies
+        run: npm install --ignore-scripts
+      - name: Install Chromium for PDF rendering tests
+        run: npx playwright install --with-deps chromium
+      - name: Run unit and PDF rendering tests
+        run: npm test
+
+      - name: Upload sample invoice PDFs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rechnio-demo-pdfs
+          path: telegram-mcp/artifacts/*.pdf
+          if-no-files-found: warn
