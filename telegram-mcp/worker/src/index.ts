@@ -124,7 +124,9 @@ export default {
     if (url.pathname === "/health") {
       return Response.json({
         ok: true,
-        service: "rechnio-telegram-mcp"
+        service: "rechnio-telegram-mcp",
+        mcp_auth_configured: Boolean(env.MCP_ACCESS_TOKEN?.trim()),
+        telegram_configured: Boolean(env.TELEGRAM_BOT_TOKEN?.trim())
       });
     }
 
@@ -132,8 +134,9 @@ export default {
       return new Response("Not found", { status: 404 });
     }
 
-    const supplied = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-    if (!env.MCP_ACCESS_TOKEN || supplied !== env.MCP_ACCESS_TOKEN) {
+    const supplied = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
+    const expected = env.MCP_ACCESS_TOKEN?.trim() ?? "";
+    if (!expected || supplied !== expected) {
       return new Response("Unauthorized", { status: 401 });
     }
 
