@@ -1,0 +1,9 @@
+{
+  "name": "rechnio-telegram-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node src/server.js", "dev": "node --watch src/server.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": { "@modelcontextprotocol/sdk": "^1.12.1", "dotenv": "^16.4.7", "express": "^5.1.0", "zod": "^3.25.0" }
+}
