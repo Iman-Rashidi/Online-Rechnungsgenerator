@@ -174,7 +174,7 @@ export default {
       return Response.json({
         ok: true,
         service: "rechnio-telegram-mcp",
-        mcp_auth_configured: Boolean(accessToken),
+        mcp_auth_configured: accessToken.length >= MIN_ACCESS_TOKEN_LENGTH,
         telegram_configured: Boolean(botToken)
       });
     }
