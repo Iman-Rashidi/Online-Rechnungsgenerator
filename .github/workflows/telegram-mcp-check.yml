@@ -72,8 +72,10 @@ jobs:
           status=$(curl --silent --output /dev/null --write-out '%{http_code}' --request POST http://127.0.0.1:8787/mcp --header 'Content-Type: application/json' --header 'Accept: application/json, text/event-stream' --header "Authorization: ${MCP_ACCESS_TOKEN}" --data "$payload")
           test "$status" = "401"
 
-          status=$(curl --silent --output /dev/null --write-out '%{http_code}' --request POST http://127.0.0.1:8787/mcp --header 'Content-Type: application/json' --header 'Accept: application/json, text/event-stream' --header "Authorization: Bearer ${MCP_ACCESS_TOKEN}" --data "$payload")
+          response=$(curl --silent --write-out '\\n%{http_code}' --request POST http://127.0.0.1:8787/mcp --header 'Content-Type: application/json' --header 'Accept: application/json, text/event-stream' --header "Authorization: Bearer ${MCP_ACCESS_TOKEN}" --data "$payload")
+          status="${response##*\\n'}"
           if [ "$status" != "200" ]; then
+            echo "$response"
             cat /tmp/rechnio-worker.log
             echo "Expected valid Bearer token to initialize MCP, got HTTP $status"
             exit 1
