@@ -1,0 +1,40 @@
+name: Deploy Telegram MCP Worker
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "telegram-mcp/worker/**"
+      - ".github/workflows/deploy-telegram-mcp.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telegram-mcp/worker
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Type-check Worker
+        run: npm run typecheck
+
+      - name: Deploy Worker to Cloudflare
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
