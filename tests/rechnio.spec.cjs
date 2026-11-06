@@ -16,11 +16,12 @@ test('invoice and reminder interactions plus printable A4 PDF', async ({ page })
   await expect(page.locator('#originalInvoice')).toBeVisible();
   await expect(page.locator('#originalDue')).toBeVisible();
   await expect(page.locator('#reminderFee')).toBeVisible();
-  await expect(page.locator('#pReminderFeeRow')).toBeVisible();
+  await expect(page.locator('#pReminderFeeRow')).toBeHidden();
 
   await page.locator('#originalInvoice').fill('TEST-001');
   await page.locator('#originalDue').fill('2026-10-01');
   await page.locator('#reminderFee').fill('5');
+  await expect(page.locator('#pReminderFeeRow')).toBeVisible();
   await page.locator('#paymentLocation').fill('Viersen');
   await expect(page.locator('#pMahnungInfo')).toContainText('TEST-001');
   await expect(page.locator('#pMahnungInfo')).toContainText('01.10.2026');
