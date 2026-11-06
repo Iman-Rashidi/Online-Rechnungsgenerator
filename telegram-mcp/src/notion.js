@@ -140,6 +140,24 @@ export async function saveInvoiceToNotion(input, totals) {
         mahnungLevel: input.mahnungLevel || "Reminder"
       }) }
     });
+    if (isMahnung && input.originalInvoice) {
+      const originalResult = await findByInvoiceNumber(input.originalInvoice);
+      if (originalResult.matches.length !== 1) {
+        throw new Error("Mahnung aktualisiert شد، اما فاکتور اصلی در Notion یکتا نیست.");
+      }
+      const originalStatus = propertySelect(originalResult.page, "Status");
+      if (["Paid", "Cancelled"].includes(originalStatus)) {
+        throw new Error("فاکتور اصلی پرداخت یا لغو شده است؛ Mahnung برای آن ثبت نمی‌شود.");
+      }
+      await notionRequest("/pages/" + originalResult.page.id, {
+        token: cfg.token,
+        method: "PATCH",
+        body: { properties: {
+          "Status": { select: { name: "Overdue" } },
+          "Mahnung level": { select: { name: input.mahnungLevel || "Reminder" } }
+        } }
+      });
+    }
     return { id: updated.id, url: updated.url, updated: true };
   }
 
