@@ -82,9 +82,9 @@ async function processInvoice(chatId, payload) {
       if (original.taxRate !== null) payload.taxRate = String(original.taxRate);
       if (!payload.customer && original.customer) payload.customer = original.customer;
     } else if (process.env.NOTION_API_KEY && (process.env.NOTION_DATA_SOURCE_ID || process.env.NOTION_INVOICES_DATABASE_ID)) {
-      throw new Error("فاکتور اصلی در Notion پیدا نشد. ابتدا فاکتور اصلی را ثبت کنید.");
+      throw new Error("Die Originalrechnung wurde in Notion nicht gefunden. Bitte zuerst die Originalrechnung speichern.");
     } else if (!Object.hasOwn(payload, "taxRate")) {
-      throw new Error("برای Mahnung بدون اتصال Notion، taxRate فاکتور اصلی را در JSON مشخص کنید.");
+      throw new Error("Ohne Notion-Verbindung muss der ursprüngliche Steuersatz im JSON-Feld „taxRate“ angegeben werden.");
     }
   }
 
@@ -96,13 +96,13 @@ async function processInvoice(chatId, payload) {
   try {
     const notion = await saveInvoiceToNotion(payload, totals);
     if (notion.skipped) {
-      await reply(chatId, "PDF ارسال شد؛ اتصال Notion هنوز تنظیم نشده است.");
+      await reply(chatId, "PDF wurde gesendet. Die Notion-Verbindung ist noch nicht eingerichtet.");
     } else {
-      await reply(chatId, "PDF ارسال شد و در Notion ثبت شد: " + notion.url);
+      await reply(chatId, "PDF wurde gesendet und in Notion gespeichert: " + notion.url);
     }
   } catch (error) {
     console.error("Notion save failed:", error instanceof Error ? error.message : "Unknown error");
-    await reply(chatId, "PDF ارسال شد، اما ثبت در Notion ناموفق بود. علت: " + String(error.message || "خطای نامشخص").slice(0, 300));
+    await reply(chatId, "PDF wurde gesendet, aber das Speichern in Notion ist fehlgeschlagen. Grund: " + String(error.message || "خطای نامشخص").slice(0, 300));
   }
 }
 
@@ -170,34 +170,25 @@ app.post("/telegram/webhook", async (req, res) => {
   try {
     const command = String(message.text || "").trim();
     if (command === "/start" || command === "/help") {
-      await reply(chat.id, [
-        "Rechnio آماده است.",
-        "",
-        "ساخت PDF: /invoice سپس JSON کامل فاکتور",
-        "ثبت پرداخت: /paid RE-2026-001",
-        "ثبت ارسال به مشتری: /sent RE-2026-001",
-        "علامت‌گذاری سررسید گذشته: /overdue RE-2026-001",
-        "لغو فاکتور: /cancelled RE-2026-001",
-        "نمونه JSON در README مخزن قرار دارد."
-      ].join("\n"));
+      await reply(chat.id, "Rechnio ist bereit.\n\nPDF-Rechnung erstellen:\n/invoice gefolgt von den vollständigen Rechnungsdaten als JSON\n\nRechnung als bezahlt markieren:\n/paid RE-2026-001\n\nAls an den Kunden versendet markieren:\n/sent RE-2026-001\n\nAls überfällig markieren:\n/overdue RE-2026-001\n\nRechnung stornieren:\n/cancelled RE-2026-001\n\nEin vollständiges JSON-Beispiel finden Sie in der README des GitHub-Projekts.");
     } else {
       const statusCommand = /^\/(paid|sent|overdue|cancelled)(?:@[A-Za-z0-9_]+)?\s+([A-Za-z0-9._/-]{1,80})$/i.exec(command);
       if (statusCommand) {
         const status = ({ paid: "Paid", sent: "Sent", overdue: "Overdue", cancelled: "Cancelled" })[statusCommand[1].toLowerCase()];
         const updated = await updateInvoiceStatus(statusCommand[2], status);
-        await reply(chat.id, updated.skipped ? "اتصال Notion تنظیم نشده است." : "وضعیت فاکتور به " + status + " تغییر کرد: " + updated.url);
+        await reply(chat.id, updated.skipped ? "Die Notion-Verbindung ist noch nicht eingerichtet." : "Der Rechnungsstatus wurde auf „" + status + "“ gesetzt: " + updated.url);
       } else if (command.startsWith("/invoice")) {
         const raw = command.slice("/invoice".length).trim();
         if (!raw) {
-          await reply(chat.id, "بعد از /invoice اطلاعات JSON فاکتور را قرار دهید. نمونهٔ کامل در README موجود است.");
+          await reply(chat.id, "Bitte senden Sie nach /invoice die Rechnungsdaten als JSON. Ein vollständiges Beispiel finden Sie in der README.");
         } else {
           let payload;
           try { payload = JSON.parse(raw); }
-          catch { await reply(chat.id, "JSON قابل خواندن نیست. ساختار نمونهٔ README را رعایت کنید."); payload = null; }
+          catch { await reply(chat.id, "Das JSON-Format ist ungültig. Bitte verwenden Sie die Struktur aus dem README-Beispiel."); payload = null; }
           if (payload) await processInvoice(chat.id, payload);
         }
       } else {
-        await reply(chat.id, "برای راهنما /help را بفرستید.");
+        await reply(chat.id, "Für Hilfe senden Sie /help.");
       }
     }
     processed.add(updateId);
@@ -206,7 +197,7 @@ app.post("/telegram/webhook", async (req, res) => {
   } catch (error) {
     console.error("Telegram update failed:", error instanceof Error ? error.message : "Unknown error");
     try {
-      await reply(chat.id, "عملیات انجام نشد: " + String(error.message || "خطای نامشخص").slice(0, 300));
+      await reply(chat.id, "Der Vorgang ist fehlgeschlagen: " + String(error.message || "خطای نامشخص").slice(0, 300));
       processed.add(updateId);
       await saveState();
       res.sendStatus(200);
