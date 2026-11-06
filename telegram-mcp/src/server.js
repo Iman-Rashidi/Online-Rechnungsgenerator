@@ -1,13 +1,13 @@
 import "dotenv/config";
 import express from "express";
 import { timingSafeEqual } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
-import { renderInvoicePdf } from "./invoice.js";
-import { saveInvoiceToNotion } from "./notion.js";
+import { renderInvoicePdf, validateInvoice } from "./invoice.js";
+import { getInvoiceFromNotion, saveInvoiceToNotion, updateInvoiceStatus } from "./notion.js";
 
 const TELEGRAM_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
 const MCP_ACCESS_TOKEN = (process.env.MCP_ACCESS_TOKEN || "").trim();
@@ -21,49 +21,114 @@ if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error("PORT m
 
 async function telegram(method, payload = {}) {
   const response = await fetch("https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN + "/" + method, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(20000)
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(20000)
   });
   const data = await response.json();
   if (!response.ok || !data.ok) throw new Error(data.description || "Telegram API request failed.");
   return data.result;
 }
+
 async function sendDocument(chatId, pdf, filename, caption) {
   const form = new FormData();
   form.append("chat_id", String(chatId));
   form.append("caption", caption.slice(0, 1024));
   form.append("document", new Blob([pdf], { type: "application/pdf" }), filename);
-  const response = await fetch("https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN + "/sendDocument", { method: "POST", body: form, signal: AbortSignal.timeout(60000) });
+  const response = await fetch("https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN + "/sendDocument", {
+    method: "POST", body: form, signal: AbortSignal.timeout(60000)
+  });
   const data = await response.json();
   if (!response.ok || !data.ok) throw new Error(data.description || "Telegram PDF delivery failed.");
   return data.result;
 }
+
 function tokenMatches(candidate, expected) {
   if (typeof candidate !== "string" || !expected) return false;
-  const a = Buffer.from(candidate.trim(), "utf8"), b = Buffer.from(expected, "utf8");
+  const a = Buffer.from(candidate.trim(), "utf8");
+  const b = Buffer.from(expected, "utf8");
   return a.length === b.length && timingSafeEqual(a, b);
 }
+
 const processed = new Set();
+const inFlight = new Set();
+
 async function loadState() {
-  try { const saved = JSON.parse(await readFile(STATE_FILE, "utf8")); for (const id of saved.processed || []) processed.add(String(id)); }
-  catch (error) { if (error.code !== "ENOENT") console.error("Could not read webhook state."); }
+  try {
+    const saved = JSON.parse(await readFile(STATE_FILE, "utf8"));
+    for (const id of saved.processed || []) processed.add(String(id));
+  } catch (error) {
+    if (error.code !== "ENOENT") console.error("Could not read webhook state.");
+  }
 }
+
 async function saveState() {
-  const { mkdir } = await import("node:fs/promises");
-  const { dirname } = await import("node:path");
   await mkdir(dirname(STATE_FILE), { recursive: true });
-  await writeFile(STATE_FILE, JSON.stringify({ processed: [...processed].slice(-5000) }), { mode: 0o600 });
+  const tempFile = STATE_FILE + ".tmp";
+  await writeFile(tempFile, JSON.stringify({ processed: [...processed].slice(-5000) }), { mode: 0o600 });
+  const { rename } = await import("node:fs/promises");
+  await rename(tempFile, STATE_FILE);
 }
+
+async function reply(chatId, text) {
+  await telegram("sendMessage", { chat_id: chatId, text, link_preview_options: { is_disabled: true } });
+}
+
+async function processInvoice(chatId, payload) {
+  if (payload.documentType === "mahnung") {
+    const original = await getInvoiceFromNotion(payload.originalInvoice);
+    if (original) {
+      if (original.taxRate !== null) payload.taxRate = String(original.taxRate);
+      if (!payload.customer && original.customer) payload.customer = original.customer;
+    } else if (process.env.NOTION_API_KEY && (process.env.NOTION_DATA_SOURCE_ID || process.env.NOTION_INVOICES_DATABASE_ID)) {
+      throw new Error("فاکتور اصلی در Notion پیدا نشد. ابتدا فاکتور اصلی را ثبت کنید.");
+    } else if (!Object.hasOwn(payload, "taxRate")) {
+      throw new Error("برای Mahnung بدون اتصال Notion، taxRate فاکتور اصلی را در JSON مشخص کنید.");
+    }
+  }
+
+  validateInvoice(payload);
+  const { pdf, totals } = await renderInvoicePdf(payload);
+  const filename = (String(payload.number || "Rechnio").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 70) || "Rechnio") + ".pdf";
+  await sendDocument(chatId, pdf, filename, "Rechnio · PDF erstellt. Brutto: " + totals.gross.toFixed(2) + " EUR");
+
+  try {
+    const notion = await saveInvoiceToNotion(payload, totals);
+    if (notion.skipped) {
+      await reply(chatId, "PDF ارسال شد؛ اتصال Notion هنوز تنظیم نشده است.");
+    } else {
+      await reply(chatId, "PDF ارسال شد و در Notion ثبت شد: " + notion.url);
+    }
+  } catch (error) {
+    console.error("Notion save failed:", error instanceof Error ? error.message : "Unknown error");
+    await reply(chatId, "PDF ارسال شد، اما ثبت در Notion ناموفق بود. علت: " + String(error.message || "خطای نامشخص").slice(0, 300));
+  }
+}
+
 function createMcpServer() {
-  const server = new McpServer({ name: "rechnio-telegram", version: "0.2.0" });
-  server.registerTool("telegram_get_me", { title: "Get Telegram bot identity", description: "Show the configured Telegram bot identity.", inputSchema: {} }, async () => {
+  const server = new McpServer({ name: "rechnio-telegram", version: "0.3.0" });
+  server.registerTool("telegram_get_me", {
+    title: "Get Telegram bot identity",
+    description: "Show the configured Telegram bot identity.",
+    inputSchema: {}
+  }, async () => {
     const bot = await telegram("getMe");
     return { content: [{ type: "text", text: JSON.stringify({ id: bot.id, is_bot: bot.is_bot, first_name: bot.first_name, username: bot.username }, null, 2) }] };
   });
-  server.registerTool("telegram_send_message", { title: "Send Telegram message", description: "Send a text message to a chat that has started the bot.", inputSchema: { chat_id: z.union([z.string(), z.number()]), text: z.string().min(1).max(4096) } }, async ({ chat_id, text }) => {
+  server.registerTool("telegram_send_message", {
+    title: "Send Telegram message",
+    description: "Send a text message to a chat that has started the bot.",
+    inputSchema: { chat_id: z.union([z.string(), z.number()]), text: z.string().min(1).max(4096) }
+  }, async ({ chat_id, text }) => {
     const sent = await telegram("sendMessage", { chat_id, text, link_preview_options: { is_disabled: true } });
     return { content: [{ type: "text", text: "Sent message " + sent.message_id + " to chat " + sent.chat.id }] };
   });
-  server.registerTool("telegram_get_updates", { title: "Get recent bot messages", description: "Read recent updates. This is unavailable while a webhook is configured.", inputSchema: { limit: z.number().int().min(1).max(20).default(10) } }, async ({ limit }) => {
+  server.registerTool("telegram_get_updates", {
+    title: "Get recent bot messages",
+    description: "Read recent updates. This is unavailable while a webhook is configured.",
+    inputSchema: { limit: z.number().int().min(1).max(20).default(10) }
+  }, async ({ limit }) => {
     const webhook = await telegram("getWebhookInfo");
     if (webhook.url) throw new Error("A Telegram webhook is active. getUpdates cannot be used while a webhook is configured.");
     const updates = await telegram("getUpdates", { limit, timeout: 0, allowed_updates: ["message"] });
@@ -75,65 +140,104 @@ function createMcpServer() {
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "3mb" }));
-app.get("/health", (_req, res) => res.json({ ok: true, service: "rechnio-telegram", telegram_configured: true, webhook_secret_configured: Boolean(TELEGRAM_WEBHOOK_SECRET), user_allowlist_configured: ALLOWED_TELEGRAM_USER_IDS.size > 0, notion_configured: Boolean(process.env.NOTION_API_KEY && process.env.NOTION_INVOICES_DATABASE_ID) }));
+
+app.get("/health", (_req, res) => res.json({
+  ok: true,
+  service: "rechnio-telegram",
+  telegram_configured: true,
+  webhook_secret_configured: Boolean(TELEGRAM_WEBHOOK_SECRET),
+  user_allowlist_configured: ALLOWED_TELEGRAM_USER_IDS.size > 0,
+  notion_configured: Boolean(process.env.NOTION_API_KEY && (process.env.NOTION_DATA_SOURCE_ID || process.env.NOTION_INVOICES_DATABASE_ID))
+}));
+
 app.post("/telegram/webhook", async (req, res) => {
   if (!tokenMatches(req.get("x-telegram-bot-api-secret-token") || "", TELEGRAM_WEBHOOK_SECRET)) return res.sendStatus(401);
   const update = req.body || {};
   const updateId = String(update.update_id ?? "");
   if (!updateId || processed.has(updateId)) return res.sendStatus(200);
+  if (inFlight.has(updateId)) return res.sendStatus(503);
+
   const message = update.message;
   const chat = message?.chat;
   const sender = message?.from;
   if (!message || chat?.type !== "private" || !sender || !ALLOWED_TELEGRAM_USER_IDS.has(String(sender.id))) {
-    processed.add(updateId); await saveState(); return res.sendStatus(200);
+    processed.add(updateId);
+    await saveState();
+    return res.sendStatus(200);
   }
-  processed.add(updateId);
-  await saveState();
-  res.sendStatus(200);
+
+  inFlight.add(updateId);
   try {
-    const text = String(message.text || "").trim();
-    if (text === "/start" || text === "/help") {
-      await telegram("sendMessage", { chat_id: chat.id, text: "Rechnio آماده است. برای ساخت فاکتور، دستور /invoice را همراه با JSON اطلاعات بفرستید. نمونه در README مخزن موجود است." });
-      return;
+    const command = String(message.text || "").trim();
+    if (command === "/start" || command === "/help") {
+      await reply(chat.id, [
+        "Rechnio آماده است.",
+        "",
+        "ساخت PDF: /invoice سپس JSON کامل فاکتور",
+        "ثبت پرداخت: /paid RE-2026-001",
+        "ثبت ارسال به مشتری: /sent RE-2026-001",
+        "علامت‌گذاری سررسید گذشته: /overdue RE-2026-001",
+        "لغو فاکتور: /cancelled RE-2026-001",
+        "نمونه JSON در README مخزن قرار دارد."
+      ].join("\n"));
+    } else {
+      const statusCommand = /^\/(paid|sent|overdue|cancelled)(?:@[A-Za-z0-9_]+)?\s+([A-Za-z0-9._/-]{1,80})$/i.exec(command);
+      if (statusCommand) {
+        const status = ({ paid: "Paid", sent: "Sent", overdue: "Overdue", cancelled: "Cancelled" })[statusCommand[1].toLowerCase()];
+        const updated = await updateInvoiceStatus(statusCommand[2], status);
+        await reply(chat.id, updated.skipped ? "اتصال Notion تنظیم نشده است." : "وضعیت فاکتور به " + status + " تغییر کرد: " + updated.url);
+      } else if (command.startsWith("/invoice")) {
+        const raw = command.slice("/invoice".length).trim();
+        if (!raw) {
+          await reply(chat.id, "بعد از /invoice اطلاعات JSON فاکتور را قرار دهید. نمونهٔ کامل در README موجود است.");
+        } else {
+          let payload;
+          try { payload = JSON.parse(raw); }
+          catch { await reply(chat.id, "JSON قابل خواندن نیست. ساختار نمونهٔ README را رعایت کنید."); payload = null; }
+          if (payload) await processInvoice(chat.id, payload);
+        }
+      } else {
+        await reply(chat.id, "برای راهنما /help را بفرستید.");
+      }
     }
-    if (!text.startsWith("/invoice")) {
-      await telegram("sendMessage", { chat_id: chat.id, text: "برای ساخت PDF از دستور /invoice همراه اطلاعات JSON استفاده کنید. برای راهنما /help را بفرستید." });
-      return;
-    }
-    const raw = text.slice("/invoice".length).trim();
-    if (!raw) {
-      await telegram("sendMessage", { chat_id: chat.id, text: "بعد از /invoice اطلاعات JSON فاکتور را قرار دهید. نمونهٔ کامل در README موجود است." });
-      return;
-    }
-    let payload;
-    try { payload = JSON.parse(raw); }
-    catch { await telegram("sendMessage", { chat_id: chat.id, text: "JSON قابل خواندن نیست. ساختار نمونهٔ README را رعایت کنید." }); return; }
-    const { pdf, totals } = await renderInvoicePdf(payload);
-    const filename = (String(payload.number || "Rechnio").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 70) || "Rechnio") + ".pdf";
-    await sendDocument(chat.id, pdf, filename, "Rechnio · PDF erstellt. Brutto: " + totals.gross.toFixed(2) + " EUR");
-    try {
-      const notion = await saveInvoiceToNotion(payload, totals);
-      if (notion.skipped) await telegram("sendMessage", { chat_id: chat.id, text: "PDF ارسال شد؛ اتصال Notion هنوز تنظیم نشده است." });
-      else await telegram("sendMessage", { chat_id: chat.id, text: "PDF ارسال شد و در Notion ثبت شد: " + notion.url });
-    } catch (notionError) {
-      console.error("Notion save failed:", notionError instanceof Error ? notionError.message : "Unknown error");
-      await telegram("sendMessage", { chat_id: chat.id, text: "PDF ارسال شد، اما ثبت در Notion ناموفق بود. تنظیمات اتصال Notion را بررسی کنید." });
-    }
+    processed.add(updateId);
+    await saveState();
+    res.sendStatus(200);
   } catch (error) {
-    console.error("Invoice processing failed:", error instanceof Error ? error.message : "Unknown error");
-    try { await telegram("sendMessage", { chat_id: chat.id, text: "Die Rechnung konnte nicht erstellt werden. Bitte Eingaben prüfen oder später erneut versuchen." }); } catch {}
+    console.error("Telegram update failed:", error instanceof Error ? error.message : "Unknown error");
+    try {
+      await reply(chat.id, "عملیات انجام نشد: " + String(error.message || "خطای نامشخص").slice(0, 300));
+      processed.add(updateId);
+      await saveState();
+      res.sendStatus(200);
+    } catch {
+      res.sendStatus(503);
+    }
+  } finally {
+    inFlight.delete(updateId);
   }
 });
+
 app.post("/admin/set-webhook", async (req, res) => {
   const auth = /^Bearer\s+(.+)$/i.exec(req.get("authorization") || "");
   if (!tokenMatches(auth?.[1] || "", MCP_ACCESS_TOKEN)) return res.sendStatus(401);
-  if (!TELEGRAM_WEBHOOK_SECRET || !process.env.PUBLIC_BASE_URL) return res.status(400).json({ error: "Set TELEGRAM_WEBHOOK_SECRET and PUBLIC_BASE_URL first." });
+  if (!TELEGRAM_WEBHOOK_SECRET || !process.env.PUBLIC_BASE_URL) {
+    return res.status(400).json({ error: "Set TELEGRAM_WEBHOOK_SECRET and PUBLIC_BASE_URL first." });
+  }
+  if (ALLOWED_TELEGRAM_USER_IDS.size === 0) {
+    return res.status(400).json({ error: "Set ALLOWED_TELEGRAM_USER_IDS before enabling the webhook." });
+  }
   try {
     const url = new URL("/telegram/webhook", process.env.PUBLIC_BASE_URL).href;
-    const result = await telegram("setWebhook", { url, secret_token: TELEGRAM_WEBHOOK_SECRET, allowed_updates: ["message"], drop_pending_updates: false });
+    const result = await telegram("setWebhook", {
+      url, secret_token: TELEGRAM_WEBHOOK_SECRET, allowed_updates: ["message"], drop_pending_updates: false
+    });
     res.json({ ok: Boolean(result), webhook_url: url });
-  } catch (error) { res.status(502).json({ error: error.message }); }
+  } catch (error) {
+    res.status(502).json({ error: error.message });
+  }
 });
+
 app.all("/mcp", async (req, res) => {
   const auth = /^Bearer\s+(.+)$/i.exec(req.get("authorization") || "");
   if (!tokenMatches(auth?.[1] || "", MCP_ACCESS_TOKEN)) return res.status(401).json({ error: "Unauthorized" });
@@ -149,5 +253,6 @@ app.all("/mcp", async (req, res) => {
     if (!res.headersSent) res.status(500).json({ error: "MCP request failed" });
   }
 });
+
 await loadState();
 app.listen(PORT, "0.0.0.0", () => console.log("Rechnio Telegram service listening on " + PORT));
