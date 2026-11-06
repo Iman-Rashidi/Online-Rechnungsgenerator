@@ -67,14 +67,14 @@ export async function handleTelegramUpdate(update, deps) {
       await deps.reply(chat.id, HELP_TEXT);
       return { handled: true, action: "help" };
     }
-    const statusCommand = /^\\/(paid|sent|overdue|cancelled)(?:@[A-Za-z0-9_]+)?\\s+([A-Za-z0-9._/-]{1,80})$/i.exec(command);
+    const statusCommand = /^\/(paid|sent|overdue|cancelled)(?:@[A-Za-z0-9_]+)?\s+([A-Za-z0-9._/-]{1,80})$/i.exec(command);
     if (statusCommand) {
       const status = ({ paid: "Paid", sent: "Sent", overdue: "Overdue", cancelled: "Cancelled" })[statusCommand[1].toLowerCase()];
       const updated = await deps.updateInvoiceStatus(statusCommand[2], status);
       await deps.reply(chat.id, updated.skipped ? "Die Notion-Verbindung ist noch nicht eingerichtet." : "Der Rechnungsstatus wurde auf „" + status + "“ gesetzt: " + updated.url);
       return { handled: true, action: "status", status };
     }
-    const invoiceCommand = /^\\/invoice(?:@[A-Za-z0-9_]+)?(?:\\s+([\\s\\S]+))?$/i.exec(command);
+    const invoiceCommand = /^\/invoice(?:@[A-Za-z0-9_]+)?(?:\s+([\s\S]+))?$/i.exec(command);
     if (invoiceCommand) {
       const raw = (invoiceCommand[1] || "").trim();
       if (!raw) {
