@@ -15,32 +15,32 @@ function isIsoDate(value) {
 }
 
 export function validateInvoice(input) {
-  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("فرمت اطلاعات فاکتور معتبر نیست.");
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Das Rechnungsdatenformat ist ungültig.");
   for (const key of ["seller", "customer", "number", "date", "due"]) {
-    if (typeof input[key] !== "string" || !input[key].trim()) throw new Error("فیلد الزامی وارد نشده: " + key);
-    if (input[key].length > 200) throw new Error("طول یکی از فیلدهای اصلی بیش از حد مجاز است.");
+    if (typeof input[key] !== "string" || !input[key].trim()) throw new Error("Pflichtfeld fehlt: " + key);
+    if (input[key].length > 200) throw new Error("Ein Pflichtfeld überschreitet die zulässige Länge.");
   }
-  if (!isIsoDate(input.date) || !isIsoDate(input.due)) throw new Error("تاریخ فاکتور یا سررسید معتبر نیست.");
-  if (input.due < input.date) throw new Error("تاریخ سررسید نمی‌تواند قبل از تاریخ فاکتور باشد.");
-  if (input.originalDue && !isIsoDate(input.originalDue)) throw new Error("تاریخ سررسید اصلی معتبر نیست.");
-  if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 100) throw new Error("فاکتور باید بین ۱ تا ۱۰۰ ردیف داشته باشد.");
+  if (!isIsoDate(input.date) || !isIsoDate(input.due)) throw new Error("Das Rechnungs- oder Fälligkeitsdatum ist ungültig.");
+  if (input.due < input.date) throw new Error("Das Fälligkeitsdatum darf nicht vor dem Rechnungsdatum liegen.");
+  if (input.originalDue && !isIsoDate(input.originalDue)) throw new Error("Das ursprüngliche Fälligkeitsdatum ist ungültig.");
+  if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 100) throw new Error("Eine Rechnung muss zwischen 1 und 100 Positionen enthalten.");
   for (const [i, item] of input.items.entries()) {
-    if (!item || typeof item.description !== "string" || !item.description.trim() || item.description.length > 500) throw new Error("شرح ردیف " + (i + 1) + " ناقص یا بیش از حد طولانی است.");
-    if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 || Number(item.quantity) > 10000) throw new Error("تعداد ردیف " + (i + 1) + " معتبر نیست.");
-    if (!Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) < 0 || Number(item.unitPrice) > 100000) throw new Error("قیمت ردیف " + (i + 1) + " معتبر نیست.");
+    if (!item || typeof item.description !== "string" || !item.description.trim() || item.description.length > 500) throw new Error("Beschreibung der Position " + (i + 1) + " ist unvollständig oder zu lang.");
+    if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 || Number(item.quantity) > 10000) throw new Error("Menge der Position " + (i + 1) + " ist ungültig.");
+    if (!Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) < 0 || Number(item.unitPrice) > 100000) throw new Error("Preis der Position " + (i + 1) + " ist ungültig.");
   }
-  if (!VALID_TAX_RATES.has(String(input.taxRate ?? "19"))) throw new Error("نرخ مالیات نامعتبر است.");
-  if (input.documentType && !["invoice", "mahnung"].includes(input.documentType)) throw new Error("نوع سند نامعتبر است.");
+  if (!VALID_TAX_RATES.has(String(input.taxRate ?? "19"))) throw new Error("Der Steuersatz ist ungültig.");
+  if (input.documentType && !["invoice", "mahnung"].includes(input.documentType)) throw new Error("Der Dokumenttyp ist ungültig.");
   if (input.documentType === "mahnung") {
-    if (typeof input.originalInvoice !== "string" || !input.originalInvoice.trim()) throw new Error("برای Mahnung شماره فاکتور اصلی لازم است.");
-    if (input.mahnungLevel && !VALID_MAHNUNG_LEVELS.has(input.mahnungLevel)) throw new Error("سطح Mahnung نامعتبر است.");
+    if (typeof input.originalInvoice !== "string" || !input.originalInvoice.trim()) throw new Error("Für eine Mahnung ist die Nummer der Originalrechnung erforderlich.");
+    if (input.mahnungLevel && !VALID_MAHNUNG_LEVELS.has(input.mahnungLevel)) throw new Error("Die Mahnstufe ist ungültig.");
   }
-  if (input.template && !VALID_TEMPLATES.has(input.template)) throw new Error("قالب فاکتور نامعتبر است.");
+  if (input.template && !VALID_TEMPLATES.has(input.template)) throw new Error("Die Rechnungsvorlage ist ungültig.");
   if (input.reminderFee !== undefined && (!Number.isFinite(Number(input.reminderFee)) || Number(input.reminderFee) < 0 || Number(input.reminderFee) > 1000000)) {
-    throw new Error("مبلغ جریمه Mahnung معتبر نیست.");
+    throw new Error("مبلغ جریمه Mahnung ist ungültig.");
   }
-  if (input.logoDataUrl !== undefined && typeof input.logoDataUrl !== "string") throw new Error("دادهٔ لوگو معتبر نیست.");
-  if (input.logoDataUrl && input.logoDataUrl.length > 2_800_000) throw new Error("لوگو حداکثر باید ۲ مگابایت باشد.");
+  if (input.logoDataUrl !== undefined && typeof input.logoDataUrl !== "string") throw new Error("دادهٔ لوگو ist ungültig.");
+  if (input.logoDataUrl && input.logoDataUrl.length > 2_800_000) throw new Error("Das Logo darf höchstens 2 MB groß sein.");
   return input;
 }
 
@@ -83,9 +83,9 @@ export async function renderInvoicePdf(raw) {
     }
     if (input.logoDataUrl) {
       const match = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(input.logoDataUrl);
-      if (!match) throw new Error("فرمت لوگو معتبر نیست.");
+      if (!match) throw new Error("فرمت لوگو ist ungültig.");
       const buffer = Buffer.from(match[2], "base64");
-      if (buffer.length > 2 * 1024 * 1024) throw new Error("لوگو حداکثر باید ۲ مگابایت باشد.");
+      if (buffer.length > 2 * 1024 * 1024) throw new Error("Das Logo darf höchstens 2 MB groß sein.");
       const extension = match[1] === "jpeg" ? "jpg" : match[1];
       await page.locator("#companyLogo").setInputFiles({ name: "logo." + extension, mimeType: "image/" + match[1], buffer });
     }
