@@ -36,3 +36,10 @@ jobs:
           test -f package.json
           test -f .env.example
           test -f src/server.js
+
+      - name: Install Cloudflare Worker dependencies
+        working-directory: telegram-mcp/worker
+        run: npm install --no-audit --no-fund
+      - name: Type-check Cloudflare Worker
+        working-directory: telegram-mcp/worker
+        run: npm run typecheck
