@@ -7,14 +7,16 @@ test('invoice and reminder interactions plus printable A4 PDF', async ({ page })
   page.on('pageerror', error => pageErrors.push(error.message));
 
   await page.goto(SITE, { waitUntil: 'networkidle' });
-  await expect(page.getByRole('heading', { name: 'Rechnung erstellen' })).toBeVisible();
-  await expect(page.locator('.item')).toHaveCount(1);
+  await expect(page).toHaveTitle(/Rechnio/);
+  await expect(page.locator('#documentType')).toBeVisible();
+  await expect(page.locator('#items > *')).toHaveCount(1);
 
   await page.locator('#documentType').selectOption('mahnung');
   await expect(page.locator('#pDocumentTitle')).toHaveText('MAHNUNG');
   await expect(page.locator('#originalInvoice')).toBeVisible();
   await expect(page.locator('#originalDue')).toBeVisible();
   await expect(page.locator('#reminderFee')).toBeVisible();
+  await expect(page.locator('#pReminderFeeRow')).toBeVisible();
 
   await page.locator('#originalInvoice').fill('TEST-001');
   await page.locator('#originalDue').fill('2026-10-01');
@@ -23,12 +25,12 @@ test('invoice and reminder interactions plus printable A4 PDF', async ({ page })
   await expect(page.locator('#pMahnungInfo')).toContainText('TEST-001');
   await expect(page.locator('#pMahnungInfo')).toContainText('01.10.2026');
   await expect(page.locator('#pReminderFee')).toContainText('5,00');
-  await expect(page.locator('#pPayment')).toContainText('Viersen');
+  await expect(page.locator('#pPaymentLocation')).toContainText('Viersen');
 
   await page.locator('#add').click();
-  await expect(page.locator('.item')).toHaveCount(2);
-  await page.locator('.item .remove').last().click();
-  await expect(page.locator('.item')).toHaveCount(1);
+  await expect(page.locator('#items > *')).toHaveCount(2);
+  await page.locator('#items .remove').last().click();
+  await expect(page.locator('#items > *')).toHaveCount(1);
 
   await page.evaluate(() => {
     window.__rechnioPrintCalled = false;
