@@ -19,6 +19,8 @@ test("renders invoice and Mahnung PDFs using the existing Rechnio page", async (
     ],
     taxRate: "19",
     template: "modern",
+    colorTheme: "forest",
+    logoDataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6fcAAAAASUVORK5CYII=",
     paymentTerms: "Bitte innerhalb von 14 Tagen überweisen."
   };
 
@@ -38,7 +40,8 @@ test("renders invoice and Mahnung PDFs using the existing Rechnio page", async (
     originalDue: "2026-11-20",
     reminderFee: 5,
     taxRate: "19",
-    template: "compact"
+    template: "compact",
+    colorTheme: "charcoal"
   });
   assert.ok(reminder.pdf.subarray(0, 5).toString("ascii") === "%PDF-");
   await writeFile(resolve(artifactsDir, "rechnio-demo-mahnung.pdf"), reminder.pdf);
