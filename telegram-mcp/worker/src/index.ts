@@ -101,7 +101,6 @@ function createServer(env: Env) {
   server.registerTool(
     "telegram_get_updates",
     {
-      description: "Read recent messages delivered to this bot. This cannot read personal Telegram chats.",
       description: "Read recent messages delivered to this bot. Pass offset as the last processed update_id plus 1 to avoid receiving the same updates again. This cannot read personal Telegram chats and requires that no Telegram webhook is active.",
       inputSchema: {
         limit: z.number().int().min(1).max(20).default(10),
