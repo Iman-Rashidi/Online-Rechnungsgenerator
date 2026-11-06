@@ -1,0 +1,40 @@
+name: Telegram MCP checks
+
+on:
+  push:
+    paths:
+      - "telegram-mcp/**"
+      - ".github/workflows/telegram-mcp-check.yml"
+  pull_request:
+    paths:
+      - "telegram-mcp/**"
+      - ".github/workflows/telegram-mcp-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telegram-mcp
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: telegram-mcp/package-lock.json
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Check JavaScript syntax
+        run: node --check src/server.js
+      - name: Verify required files
+        run: |
+          test -f package.json
+          test -f .env.example
+          test -f src/server.js
