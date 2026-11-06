@@ -39,7 +39,7 @@ For a payment reminder, use `"documentType":"mahnung"`, set `"originalInvoice"`,
 - `ALLOWED_TELEGRAM_USER_IDS`: comma-separated numeric Telegram user IDs allowed to create documents. **Required for production.**
 - `PUBLIC_BASE_URL`: public HTTPS origin of this service, without a trailing route, e.g. `https://your-service.example`.
 - `NOTION_API_KEY`: Notion integration secret.
-- `NOTION_INVOICES_DATABASE_ID`: ID of the Rechnio invoice database. Share that database with the Notion integration.
+- `NOTION_DATA_SOURCE_ID`: ID of the Rechnio invoice database. Share that database with the Notion integration.
 - Optional: `PORT` (default 3000), `STATE_FILE` (default `./data/telegram-updates.json`).
 
 Never put secrets in GitHub, chat messages, source files, or screenshots. Configure them as hosting-provider secrets. Restrict access to a private Telegram chat and only add trusted user IDs to the allowlist.
