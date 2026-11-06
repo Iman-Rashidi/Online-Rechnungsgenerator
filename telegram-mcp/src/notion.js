@@ -105,12 +105,12 @@ function pageProperties(input, totals, { documentType, originalInvoice, mahnungL
 }
 
 export async function updateInvoiceStatus(invoiceNumber, status) {
-  if (!ALLOWED_STATUSES.has(status)) throw new Error("وضعیت انتخاب‌شده معتبر نیست.");
+  if (!ALLOWED_STATUSES.has(status)) throw new Error("Der ausgewählte Rechnungsstatus ist ungültig.");
   const cfg = config();
   if (!cfg) return { skipped: true, reason: "Notion credentials not configured" };
   const result = await findByInvoiceNumber(invoiceNumber);
   if (result.matches.length !== 1) {
-    throw new Error(result.matches.length ? "شماره فاکتور تکراری است؛ اصلاح دستی لازم است." : "فاکتور با این شماره در Notion پیدا نشد.");
+    throw new Error(result.matches.length ? "Die Rechnungsnummer ist mehrfach vorhanden. Bitte die doppelten Einträge in Notion manuell korrigieren." : "Eine Rechnung mit dieser Nummer wurde in Notion nicht gefunden.");
   }
   const page = result.matches[0];
   const updated = await notionRequest("/pages/" + page.id, {
@@ -128,13 +128,13 @@ export async function saveInvoiceToNotion(input, totals) {
   const isMahnung = input.documentType === "mahnung";
   const existingResult = await findByInvoiceNumber(input.number);
   if (existingResult.matches.length > 1) {
-    throw new Error("شماره فاکتور تکراری است؛ ابتدا رکوردهای تکراری را در Notion اصلاح کنید.");
+    throw new Error("Die Rechnungsnummer ist mehrfach vorhanden. Bitte zuerst die doppelten Notion-Einträge korrigieren.");
   }
   if (existingResult.page) {
     const existingMahnungLevel = propertySelect(existingResult.page, "Mahnung level") || "Reminder";
     const selectedMahnungLevel = isMahnung ? (input.mahnungLevel || existingMahnungLevel) : "None";
     if (isMahnung && (!MAHNUNG_LEVELS.includes(selectedMahnungLevel) || selectedMahnungLevel === "None")) {
-      throw new Error("سطح Mahnung معتبر نیست.");
+      throw new Error("Die Mahnstufe ist ungültig.");
     }
     const updated = await notionRequest("/pages/" + existingResult.page.id, {
       token: cfg.token,
@@ -148,11 +148,11 @@ export async function saveInvoiceToNotion(input, totals) {
     if (isMahnung && input.originalInvoice) {
       const originalResult = await findByInvoiceNumber(input.originalInvoice);
       if (originalResult.matches.length !== 1) {
-        throw new Error("Mahnung aktualisiert شد، اما فاکتور اصلی در Notion یکتا نیست.");
+        throw new Error("Die Mahnung wurde aktualisiert, aber die Originalrechnung ist in Notion nicht eindeutig.");
       }
       const originalStatus = propertySelect(originalResult.page, "Status");
       if (["Paid", "Cancelled"].includes(originalStatus)) {
-        throw new Error("فاکتور اصلی پرداخت یا لغو شده است؛ Mahnung برای آن ثبت نمی‌شود.");
+        throw new Error("Die Originalrechnung ist bereits bezahlt oder storniert. Dafür wird keine Mahnung erstellt.");
       }
       await notionRequest("/pages/" + originalResult.page.id, {
         token: cfg.token,
@@ -169,16 +169,16 @@ export async function saveInvoiceToNotion(input, totals) {
   let original = null;
   let mahnungLevel = "None";
   if (isMahnung) {
-    if (!input.originalInvoice) throw new Error("شماره فاکتور اصلی برای Mahnung الزامی است.");
+    if (!input.originalInvoice) throw new Error("Für eine Mahnung ist die Nummer der Originalrechnung erforderlich.");
     const originalResult = await findByInvoiceNumber(input.originalInvoice);
     if (originalResult.matches.length !== 1) {
-      throw new Error(originalResult.matches.length ? "شماره فاکتور اصلی در Notion تکراری است." : "فاکتور اصلی در Notion پیدا نشد؛ ابتدا آن را ثبت کنید.");
+      throw new Error(originalResult.matches.length ? "Die Nummer der Originalrechnung ist in Notion mehrfach vorhanden." : "Die Originalrechnung wurde in Notion nicht gefunden. Bitte zuerst die Originalrechnung speichern.");
     }
     original = originalResult.page;
     const currentLevel = propertySelect(original, "Mahnung level") || "None";
     const currentIndex = MAHNUNG_LEVELS.indexOf(currentLevel);
     mahnungLevel = input.mahnungLevel || MAHNUNG_LEVELS[Math.min(Math.max(currentIndex, 0) + 1, MAHNUNG_LEVELS.length - 1)];
-    if (!MAHNUNG_LEVELS.includes(mahnungLevel) || mahnungLevel === "None") throw new Error("سطح Mahnung معتبر نیست.");
+    if (!MAHNUNG_LEVELS.includes(mahnungLevel) || mahnungLevel === "None") throw new Error("Die Mahnstufe ist ungültig.");
   }
 
   const created = await notionRequest("/pages", {
@@ -205,7 +205,7 @@ export async function saveInvoiceToNotion(input, totals) {
         } }
       });
     } catch (error) {
-      throw new Error("Mahnung ثبت شد اما وضعیت فاکتور اصلی به‌روزرسانی نشد: " + error.message);
+      throw new Error("Die Mahnung wurde gespeichert, aber der Status der Originalrechnung konnte nicht aktualisiert werden: " + error.message);
     }
   }
   return { id: created.id, url: created.url, updated: false };
