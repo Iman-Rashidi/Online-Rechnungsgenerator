@@ -1,17 +1,19 @@
-# Rechnio Telegram + Notion integration
+# Rechnio: Telegram- und Notion-Integration
 
-This service connects Telegram to the **existing Rechnio website**. It opens the repository's existing `index.html` in headless Chromium and prints that exact UI to PDF, so the original tax calculations and the classic, modern and compact templates are retained.
+**Sprache der Bot-Nachrichten und Dokumentation: Deutsch.** Der Dienst verwendet die vorhandene Rechnio-Webseite `index.html` in Chromium zur PDF-Erstellung. Bestehende Berechnungen, Farben und Vorlagen (Classic, Modern und Compact) bleiben erhalten.
 
-## Telegram commands
+## Telegram-Befehle
 
-- `/start` or `/help`: show the command guide.
-- `/invoice {JSON}`: create a PDF using the existing Rechnio form, send it to Telegram, and create/update its Notion row.
-- `/paid RE-2026-001`: mark an invoice as paid in Notion.
-- `/sent RE-2026-001`: mark an invoice as sent to the customer.
-- `/overdue RE-2026-001`: mark an invoice as overdue.
-- `/cancelled RE-2026-001`: cancel an invoice.
+- `/start` oder `/help`: Deutsche Hilfe anzeigen.
+- `/invoice {JSON}`: PDF erstellen, an Telegram senden und den Datensatz in Notion anlegen oder aktualisieren.
+- `/paid RE-2026-001`: Rechnung als bezahlt markieren.
+- `/sent RE-2026-001`: Rechnung als versendet markieren.
+- `/overdue RE-2026-001`: Rechnung als überfällig markieren.
+- `/cancelled RE-2026-001`: Rechnung stornieren.
 
-Example (dummy data only):
+## Beispiel für eine Testrechnung
+
+Nur Beispieldaten verwenden. Dies ist keine echte Rechnung und begründet keine Zahlungspflicht.
 
 ```json
 /invoice {
@@ -31,54 +33,49 @@ Example (dummy data only):
     { "description": "Webdesign", "quantity": 2, "unitPrice": 80 }
   ],
   "paymentTerms": "Bitte innerhalb von 14 Tagen überweisen.",
-  "note": "Testrechnung, nicht bezahlen."
+  "note": "Testrechnung – nicht bezahlen."
 }
 ```
 
-For a Mahnung, set `"documentType":"mahnung"`, give the reminder its own `number`, set `"originalInvoice"` to the exact number of the original invoice, and include the original invoice's line items. When the original invoice exists in Notion, its stored tax rate is inherited automatically, and the original row is updated to `Overdue` with the next Mahnung level. The reminder is stored as a separate Notion row. Reusing a document number updates its existing Notion row instead of creating a duplicate.
+## Mahnungen
 
-## Notion database
+Für eine Mahnung `"documentType":"mahnung"` verwenden, eine eigene Dokumentnummer vergeben und die Nummer der Originalrechnung in `"originalInvoice"` eintragen. Die ursprünglichen Rechnungspositionen angeben. Existiert die Originalrechnung in Notion, übernimmt der Dienst den gespeicherten Steuersatz und aktualisiert Status sowie Mahnstufe der Originalrechnung. Die Mahnung wird als eigener Datensatz gespeichert.
 
-The service uses the Notion **data source ID**, not a database title. Its property names and types are aligned with the connected Rechnio database:
+## Notion-Datenbank
 
-- `Invoice` (title), `Invoice number` (rich text), `Original invoice number` (rich text), `Document type` (select)
-- `Customer` (rich text), `Customer email` (email), `Invoice date` / `Due date` (date)
-- `Net amount`, `Tax rate %`, `Gross amount` (number)
+Der Dienst verwendet die Notion Data-Source-ID und folgende Eigenschaften:
+
+- `Invoice` (Titel), `Invoice number` (Rich Text), `Original invoice number` (Rich Text), `Document type` (Select)
+- `Customer` (Rich Text), `Customer email` (E-Mail), `Invoice date` / `Due date` (Datum)
+- `Net amount`, `Tax rate %`, `Gross amount` (Zahl)
 - `Status` (Draft / Sent / Paid / Overdue / Cancelled)
-- `Mahnung level` (None / Reminder / First Mahnung / Second Mahnung / Final Mahnung), `Notes` (rich text)
+- `Mahnung level` (None / Reminder / First Mahnung / Second Mahnung / Final Mahnung), `Notes` (Rich Text)
 
-The PDF itself is delivered to Telegram. `PDF URL` remains empty because this service does not publish customer invoices to a public file host.
+Das PDF wird direkt über Telegram zugestellt und nicht öffentlich gehostet. Deshalb bleibt `PDF URL` leer.
 
-## Environment variables
+## Erforderliche Umgebungsvariablen
 
-- `TELEGRAM_BOT_TOKEN`: token for the bot.
-- `TELEGRAM_WEBHOOK_SECRET`: secret used to verify Telegram webhook requests.
-- `ALLOWED_TELEGRAM_USER_IDS`: comma-separated numeric user IDs. Required; only these private chats can use the bot.
-- `MCP_ACCESS_TOKEN`: random secret of at least 32 characters for the MCP and admin endpoints.
-- `PUBLIC_BASE_URL`: public HTTPS origin of the deployed service.
-- `NOTION_API_KEY`: Notion integration secret.
-- `NOTION_DATA_SOURCE_ID`: ID from the Rechnio invoice data source.
-- Optional: `PORT` (default 3000), `STATE_FILE` (default `./data/telegram-updates.json`).
+- `TELEGRAM_BOT_TOKEN`: Telegram-Bot-Token.
+- `TELEGRAM_WEBHOOK_SECRET`: Geheimnis zur Prüfung der Telegram-Webhooks.
+- `ALLOWED_TELEGRAM_USER_IDS`: erlaubte numerische Telegram-Benutzer-IDs, durch Kommas getrennt.
+- `MCP_ACCESS_TOKEN`: zufälliges Geheimnis mit mindestens 32 Zeichen.
+- `PUBLIC_BASE_URL`: öffentliche HTTPS-Adresse des Dienstes.
+- `NOTION_API_KEY`: Notion-Integrationsschlüssel.
+- `NOTION_DATA_SOURCE_ID`: ID der Rechnio-Datenquelle in Notion.
+- Optional: `PORT` (Standard 3000), `STATE_FILE` (Standard `./data/telegram-updates.json`).
 
-Share the invoice database with the Notion integration and grant it read/write access. Do not paste credentials into a chat, commit them to Git, or put them in screenshots. Keep all real secrets in the hosting provider's secret manager.
+Die Notion-Datenbank muss für die Integration freigegeben sein. Zugangsdaten ausschließlich im Secret Manager des Hosting-Anbieters speichern. Niemals Tokens in Git, Issues, Screenshots oder Chats veröffentlichen.
 
-## Run and deploy
+## Bereitstellung
 
-Requires Node.js 20+, Chromium support, HTTPS, and persistent disk for `STATE_FILE`. Run `npm install`, then `npm start`. The service responds to `GET /health`.
+Benötigt werden Node.js 20+, Chromium-Unterstützung, HTTPS und ein dauerhaftes Dateisystem für `STATE_FILE`. Anschließend `npm install` und `npm start` ausführen. Der Health-Check ist unter `GET /health` erreichbar.
 
-After deployment, activate the Telegram webhook once by sending an authenticated POST to `/admin/set-webhook` with `Authorization: Bearer <MCP_ACCESS_TOKEN>`. The service then registers `/telegram/webhook` with Telegram.
-
-The webhook verifies the Telegram secret header and private-chat allowlist. Update IDs are stored in `STATE_FILE` to reduce duplicate processing across restarts. Mount a persistent volume for the containing directory.
+Nach der Bereitstellung den Webhook einmalig über einen authentifizierten POST-Aufruf an `/admin/set-webhook` aktivieren. Der Header lautet `Authorization: Bearer <MCP_ACCESS_TOKEN>`.
 
 ## Tests
 
-`npm test` runs:
-- payload validation and invalid-date / invalid-tax / invalid-reminder cases
-- mocked Notion data-source create, lookup and payment-status calls
-- Playwright PDF generation against the original Rechnio page for both an invoice and a Mahnung
+`npm test` prüft Eingabevalidierung, simulierte Notion-Aufrufe, Rechnungsstatus, Mahnstufen und die PDF-Erstellung mit Playwright anhand der bestehenden Rechnio-Seite. GitHub Actions führt die Tests aus und stellt PDF-Testdateien als Artefakte bereit.
 
-GitHub Actions installs Chromium and runs these tests for the pull request and the integration branch.
+## Produktionsstatus
 
-## Production status
-
-Source code and database schema are prepared, but the service is not live until a trusted account owner configures the Telegram and Notion secrets and deploys the Node.js service to a persistent host. The real Telegram -> PDF -> Notion flow cannot be verified without those external credentials and a live bot.
+Der Quellcode ist integriert und die automatisierten Tests wurden ausgeführt. Der Dienst ist erst live, wenn ein Node.js-Host mit Chromium und dauerhaftem Speicher eingerichtet und die Telegram- sowie Notion-Zugangsdaten dort sicher hinterlegt wurden. Ein echter End-to-End-Test benötigt diese Zugangsdaten und einen aktiven Bot.
