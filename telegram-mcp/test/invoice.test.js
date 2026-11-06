@@ -6,12 +6,12 @@ const good = {
   seller: "Example GmbH", customer: "Testkunde", number: "RE-TEST-001",
   date: "2026-11-06", due: "2026-11-20",
   items: [{ description: "Webdesign", quantity: 2, unitPrice: 10 }],
-  taxRate: "19", template: "modern"
+  taxRate: "19", template: "modern", colorTheme: "ocean"
 };
 
 test("accepts a complete invoice payload", () => assert.equal(validateInvoice(good), good));
-test("rejects missing required fields", () => assert.throws(() => validateInvoice({ ...good, customer: "" }), /customer/));
-test("rejects empty or excessive item lists", () => assert.throws(() => validateInvoice({ ...good, items: [] }), /1 bis 100/));
+test("rejects missing required fields", () => assert.throws(() => validateInvoice({ ...good, customer: "" }), /Kunde/));
+test("rejects empty or excessive item lists", () => assert.throws(() => validateInvoice({ ...good, items: [] }), /zwischen 1 und 100/));
 test("rejects negative quantities", () => assert.throws(() => validateInvoice({ ...good, items: [{ ...good.items[0], quantity: -1 }] }), /Menge/));
 test("rejects malformed dates and due dates before invoice date", () => {
   assert.throws(() => validateInvoice({ ...good, date: "2026-02-30" }), /Datum/);
@@ -24,4 +24,11 @@ test("rejects unknown templates and tax rates", () => {
 test("requires original invoice number and valid fee for reminders", () => {
   assert.throws(() => validateInvoice({ ...good, documentType: "mahnung" }), /Originalrechnung/);
   assert.throws(() => validateInvoice({ ...good, documentType: "mahnung", originalInvoice: "RE-1", reminderFee: -1 }), /Mahngebühr/);
+});
+
+test("accepts supported invoice color themes and rejects unknown themes", () => {
+  for (const colorTheme of ["ocean", "forest", "violet", "charcoal"]) {
+    assert.equal(validateInvoice({ ...good, colorTheme }).colorTheme, colorTheme);
+  }
+  assert.throws(() => validateInvoice({ ...good, colorTheme: "neon" }), /Farbgestaltung/);
 });
