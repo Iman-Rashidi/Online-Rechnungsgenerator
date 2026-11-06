@@ -24,5 +24,7 @@ jobs:
         run: npm install --no-save @playwright/test
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      - name: Start local web server
+        run: python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/rechnio-server.log 2>&1 &
       - name: Run browser tests
         run: npx playwright test
