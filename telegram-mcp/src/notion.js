@@ -131,13 +131,18 @@ export async function saveInvoiceToNotion(input, totals) {
     throw new Error("شماره فاکتور تکراری است؛ ابتدا رکوردهای تکراری را در Notion اصلاح کنید.");
   }
   if (existingResult.page) {
+    const existingMahnungLevel = propertySelect(existingResult.page, "Mahnung level") || "Reminder";
+    const selectedMahnungLevel = isMahnung ? (input.mahnungLevel || existingMahnungLevel) : "None";
+    if (isMahnung && (!MAHNUNG_LEVELS.includes(selectedMahnungLevel) || selectedMahnungLevel === "None")) {
+      throw new Error("سطح Mahnung معتبر نیست.");
+    }
     const updated = await notionRequest("/pages/" + existingResult.page.id, {
       token: cfg.token,
       method: "PATCH",
       body: { properties: pageProperties(input, totals, {
         documentType: isMahnung ? "mahnung" : "invoice",
         originalInvoice: input.originalInvoice,
-        mahnungLevel: input.mahnungLevel || "Reminder"
+        mahnungLevel: selectedMahnungLevel
       }) }
     });
     if (isMahnung && input.originalInvoice) {
@@ -154,7 +159,7 @@ export async function saveInvoiceToNotion(input, totals) {
         method: "PATCH",
         body: { properties: {
           "Status": { select: { name: "Overdue" } },
-          "Mahnung level": { select: { name: input.mahnungLevel || "Reminder" } }
+          "Mahnung level": { select: { name: selectedMahnungLevel } }
         } }
       });
     }
