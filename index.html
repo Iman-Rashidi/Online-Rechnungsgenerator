@@ -6,7 +6,7 @@
 <meta name="description" content="Ein einfacher Online-Rechnungsgenerator zum Erstellen und Drucken von Rechnungen als PDF.">
 <title>Rechnio | Online-Rechnungsgenerator</title>
 <style>
-:root{--ink:#172033;--muted:#64748b;--line:#e2e8f0;--brand:#4f46e5;--bg:#f5f7fb}
+:root{--ink:#172033;--muted:#64748b;--line:#e2e8f0;--brand:#1f5b78;--brand-soft:#e9f1f5;--brand-ink:#17445b;--bg:#f5f7fb}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
 header{background:#fff;border-bottom:1px solid var(--line);padding:18px 5vw;display:flex;justify-content:space-between;align-items:center}
 .logo{font-size:22px;font-weight:800;letter-spacing:-.7px}.logo span{color:var(--brand)}
@@ -14,10 +14,10 @@ header small{color:var(--muted)}main{max-width:1200px;margin:30px auto;padding:0
 .panel,.preview{background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:0 8px 30px #17203308}
 h1{font-size:25px;margin:0 0 5px}h2{font-size:17px;margin:24px 0 12px}p.sub{color:var(--muted);margin:0 0 20px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}.field[hidden]{display:none}.field.full{grid-column:1/-1}label{font-size:13px;font-weight:650;color:#475569}
-input,textarea{font:inherit;border:1px solid #cbd5e1;border-radius:9px;padding:10px 11px;width:100%;min-width:0;background:#fff;color:var(--ink)}input:focus,textarea:focus{outline:2px solid #c7d2fe;border-color:var(--brand)}
+input,textarea,select{font:inherit;border:1px solid #cbd5e1;border-radius:9px;padding:10px 11px;width:100%;min-width:0;background:#fff;color:var(--ink)}input:focus,textarea:focus,select:focus{outline:2px solid var(--brand-soft);border-color:var(--brand)}
 textarea{resize:vertical;min-height:68px}.items-head,.item{display:grid;grid-template-columns:minmax(0,1fr) 68px 100px 34px;gap:8px;align-items:center}.items-head{font-size:12px;color:var(--muted);margin-bottom:6px}.item{margin-bottom:8px}.item input{padding:9px 7px}.remove{border:0;background:#fee2e2;color:#991b1b;border-radius:8px;height:36px;cursor:pointer;font-size:18px}
-button{border:0;border-radius:10px;padding:11px 15px;font:inherit;font-weight:700;cursor:pointer}.primary{background:var(--brand);color:#fff}.secondary{background:#eef2ff;color:#3730a3}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
-.preview{padding:34px;position:sticky;top:20px;align-self:start}.invoice-top{display:flex;justify-content:space-between;gap:15px;border-bottom:2px solid var(--ink);padding-bottom:22px}.invoice-top h2{font-size:30px;margin:0}.muted{color:var(--muted);white-space:pre-line}.addresses{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:25px 0}.addresses strong,.meta strong{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px}
+button{border:0;border-radius:10px;padding:11px 15px;font:inherit;font-weight:700;cursor:pointer}.primary{background:var(--brand);color:#fff}.secondary{background:var(--brand-soft);color:var(--brand-ink)}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.preview{padding:34px;position:sticky;top:20px;align-self:start}.invoice-top{display:flex;justify-content:space-between;align-items:flex-start;gap:22px;border-bottom:2px solid var(--ink);padding-bottom:22px}.invoice-top>div:first-child{min-width:0;max-width:62%}.invoice-top h2{font-size:28px;line-height:1.15;margin:4px 0 0;text-align:right;flex:0 0 auto}.invoice-brandmark{font-size:22px;font-weight:800;letter-spacing:-.7px;margin:0 0 8px}.invoice-brandmark span{color:var(--brand)}.company-logo{display:none;max-width:190px;max-height:92px;width:auto;height:auto;object-fit:contain;object-position:left center;margin:0 0 12px}.preview.has-company-logo .invoice-brandmark{display:none}.preview.has-company-logo .company-logo{display:block}.muted{color:var(--muted);white-space:pre-line}.addresses{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:25px 0}.addresses strong,.meta strong{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px}
 .meta{display:flex;gap:25px;margin:20px 0}.meta div{font-size:14px}.preview table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}.preview th{text-align:left;color:var(--muted);font-weight:650;border-bottom:1px solid var(--line);padding:9px 4px}.preview td{padding:11px 4px;border-bottom:1px solid var(--line)}.num{text-align:right}.total{margin:18px 0 0 auto;width:min(100%,260px)}.total div{display:flex;justify-content:space-between;padding:5px 0}.total .grand{font-size:20px;font-weight:800;border-top:2px solid var(--ink);margin-top:8px;padding-top:12px}
 .note{margin-top:30px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:15px}
 .preview.template-modern{border-top:7px solid var(--brand);border-radius:4px;box-shadow:none}
@@ -25,7 +25,7 @@ button{border:0;border-radius:10px;padding:11px 15px;font:inherit;font-weight:70
 .preview.template-modern .invoice-top h2{color:var(--brand);letter-spacing:.08em;font-size:25px}
 .preview.template-modern .addresses{background:#f8fafc;padding:16px;border-radius:8px}
 .preview.template-modern table th{background:#eef2ff;color:#312e81}
-.preview.template-compact{padding:22px;font-size:12px}
+.preview.theme-forest{--brand:#28745a;--brand-soft:#eaf4ef;--brand-ink:#205640}.preview.theme-violet{--brand:#6750a4;--brand-soft:#f0ecf8;--brand-ink:#49377e}.preview.theme-charcoal{--brand:#475569;--brand-soft:#eef1f4;--brand-ink:#334155}.preview.theme-ocean{--brand:#1f5b78;--brand-soft:#e9f1f5;--brand-ink:#17445b}.preview[class*="theme-"] .invoice-top{border-bottom-color:var(--brand)}.preview[class*="theme-"] .invoice-top h2{color:var(--brand)}.preview[class*="theme-"] table th{background:var(--brand-soft);color:var(--brand-ink)}.preview[class*="theme-"] .grand{border-color:var(--brand)}.preview.template-compact{padding:22px;font-size:12px}
 .preview.template-compact .invoice-top{padding-bottom:12px}
 .preview.template-compact .addresses{margin:14px 0;gap:12px}
 .preview.template-compact .meta{margin:12px 0;gap:16px}
@@ -68,7 +68,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:25px}
 <div class="field"><label for="date">Rechnungsdatum</label><input id="date" type="date"></div>
 <div class="field"><label for="due">Fällig am</label><input id="due" type="date"></div><div class="field mahnung-field" hidden><label for="originalInvoice">Ursprüngliche Rechnungsnummer</label><input id="originalInvoice" placeholder="z. B. RE-2026-001"></div><div class="field mahnung-field" hidden><label for="originalDue">Ursprünglich fällig am</label><input id="originalDue" type="date"></div><div class="field mahnung-field" hidden><label for="reminderFee">Mahngebühr (€)</label><input id="reminderFee" type="number" min="0" max="1000000" step="0.01" value="0"></div>
 <div class="field"><label for="taxRate">Umsatzsteuer</label><select id="taxRate"><option value="19">19 % (Regelsteuersatz)</option><option value="7">7 % (ermäßigt)</option><option value="0">0 % (nur wenn anwendbar)</option><option value="none">Keine Umsatzsteuer (§ 19 / steuerfrei)</option></select></div>
-<div class="field full"><label for="invoiceTemplate">Rechnungsvorlage</label><select id="invoiceTemplate"><option value="classic">Klassisch – Geschäftlich</option><option value="modern">Modern – Minimalistisch</option><option value="compact">Kompakt – Platzsparend</option></select></div>
+<div class="field"><label for="invoiceTemplate">Rechnungsvorlage</label><select id="invoiceTemplate"><option value="classic">Klassisch – Geschäftlich</option><option value="modern">Modern – Minimalistisch</option><option value="compact">Kompakt – Platzsparend</option></select></div><div class="field"><label for="invoiceColor">Farbgestaltung</label><select id="invoiceColor"><option value="ocean">Ozeanblau</option><option value="forest">Waldgrün</option><option value="violet">Violett</option><option value="charcoal">Schiefergrau</option></select></div>
 </div>
 <p class="sub">Alle Positionspreise werden als Nettopreise eingegeben. Netto, Umsatzsteuer und Brutto werden automatisch berechnet.</p>
 <h2>Positionen</h2>
@@ -78,7 +78,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:25px}
 <div class="actions"><button class="primary" id="print" type="button">Drucken / Als PDF speichern</button><button class="secondary" id="reset" type="button">Zurücksetzen</button></div>
 </section>
 <section class="preview template-classic" id="invoicePreview" aria-label="Rechnungsvorschau">
-<div class="invoice-top"><div><img id="pCompanyLogo" alt="Firmenlogo" style="display:none;max-width:160px;max-height:85px;object-fit:contain;object-position:left center;margin-bottom:10px"><div class="logo">Rech<span>nio</span></div><div class="muted" id="pSeller">Dein Name oder Unternehmen</div><div class="muted" id="pEmail"></div><div class="muted" id="pTaxNumber"></div><div class="muted" id="pVatId"></div></div><h2 id="pDocumentTitle">RECHNUNG</h2></div>
+<div class="invoice-top"><div><img id="pCompanyLogo" class="company-logo" alt="Firmenlogo"><div class="invoice-brandmark">Rech<span>nio</span></div><div class="muted" id="pSeller">Dein Name oder Unternehmen</div><div class="muted" id="pEmail"></div><div class="muted" id="pTaxNumber"></div><div class="muted" id="pVatId"></div></div><h2 id="pDocumentTitle">RECHNUNG</h2></div>
 <div class="addresses"><div><strong>Rechnung an</strong><div id="pCustomer">Kundenname</div><div class="muted" id="pCustomerAddress"></div></div><div><strong>Absender</strong><div id="pSellerAddress" class="muted">Deine Anschrift</div></div></div>
 <div class="meta"><div><strong>Rechnungsnummer</strong><span id="pNumber">RE-2026-001</span></div><div><strong>Rechnungsdatum</strong><span id="pDate">-</span></div><div><strong>Fälligkeitsdatum</strong><span id="pDue">-</span></div></div>
 <table><thead><tr><th>Beschreibung</th><th class="num">Menge</th><th class="num">Einzelpreis</th><th class="num">Betrag</th></tr></thead><tbody id="pRows"><tr><td>Leistung</td><td class="num">1</td><td class="num">0,00 €</td><td class="num">0,00 €</td></tr></tbody></table>
@@ -251,11 +251,14 @@ function render() {
 fields.forEach(id => $(id).addEventListener('input', render));
 $('taxRate').addEventListener('change', render);
 $('documentType').addEventListener('change', render);
-$('invoiceTemplate').addEventListener('change', () => {
+function applyInvoiceDesign() {
   const preview = $('invoicePreview');
-  preview.classList.remove('template-classic', 'template-modern', 'template-compact');
+  preview.classList.remove('template-classic', 'template-modern', 'template-compact', 'theme-ocean', 'theme-forest', 'theme-violet', 'theme-charcoal');
   preview.classList.add('template-' + $('invoiceTemplate').value);
-});
+  preview.classList.add('theme-' + $('invoiceColor').value);
+}
+$('invoiceTemplate').addEventListener('change', applyInvoiceDesign);
+$('invoiceColor').addEventListener('change', applyInvoiceDesign);
 $('add').addEventListener('click', () => addItem());
 $('print').addEventListener('click', () => window.print());
 $('reset').addEventListener('click', () => {
@@ -274,8 +277,8 @@ $('reset').addEventListener('click', () => {
   $('number').value = 'RE-2026-001';
   $('taxRate').value = '19';
   $('invoiceTemplate').value = 'classic';
-  $('invoicePreview').classList.remove('template-modern', 'template-compact');
-  $('invoicePreview').classList.add('template-classic');
+  $('invoiceColor').value = 'ocean';
+  applyInvoiceDesign();
   $('items').replaceChildren();
   addItem('Leistung', 1, 0);
   render();
@@ -285,7 +288,7 @@ const ALLOWED_LOGO_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 function clearLogo() {
   $('pCompanyLogo').removeAttribute('src');
-  $('pCompanyLogo').style.display = 'none';
+  $('invoicePreview').classList.remove('has-company-logo');
 }
 async function hasValidLogoSignature(file) {
   const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
@@ -331,8 +334,12 @@ $('companyLogo').addEventListener('change', async () => {
         status.textContent = 'Das Logo konnte nicht gelesen werden.';
         return;
       }
+      image.onload = () => $('invoicePreview').classList.add('has-company-logo');
+      image.onerror = () => {
+        clearLogo();
+        status.textContent = 'Das Logo konnte nicht angezeigt werden.';
+      };
       image.src = reader.result;
-      image.style.display = 'block';
       status.textContent = 'Logo erfolgreich geladen.';
     };
     reader.onerror = () => {
@@ -349,6 +356,7 @@ $('companyLogo').addEventListener('change', async () => {
 });
 
 $('date').value = localDateValue();
+applyInvoiceDesign();
 addItem('Leistung', 1, 0);
 render();
 </script>
