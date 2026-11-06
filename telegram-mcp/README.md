@@ -1,6 +1,6 @@
 # Rechnio: Telegram- und Notion-Integration
 
-**Sprache der Bot-Nachrichten und Dokumentation: Deutsch.** Der Dienst verwendet die vorhandene Rechnio-Webseite `index.html` in Chromium zur PDF-Erstellung. Bestehende Berechnungen, Farben und Vorlagen (Classic, Modern und Compact) bleiben erhalten.
+**Sprache der Bot-Nachrichten und Dokumentation: Deutsch.** Der Dienst verwendet die vorhandene Rechnio-Webseite `index.html` in Chromium zur PDF-Erstellung. Bestehende Berechnungen und Vorlagen (Classic, Modern und Compact) bleiben erhalten. Vier Farbwelten stehen zur Auswahl: Ozeanblau, Waldgrün, Violett und Schiefergrau. Ein hochgeladenes Firmenlogo ersetzt die Rechnio-Wortmarke im Rechnungsbriefkopf und wird vor dem PDF-Export vollständig geladen.
 
 ## Telegram-Befehle
 
@@ -28,6 +28,7 @@ Nur Beispieldaten verwenden. Dies ist keine echte Rechnung und begründet keine 
   "due": "2026-11-20",
   "taxRate": "19",
   "template": "modern",
+  "colorTheme": "ocean",
   "documentType": "invoice",
   "items": [
     { "description": "Webdesign", "quantity": 2, "unitPrice": 80 }
@@ -43,7 +44,7 @@ Für eine Mahnung `"documentType":"mahnung"` verwenden, eine eigene Dokumentnumm
 
 ## Notion-Datenbank
 
-Der Dienst verwendet die Notion Data-Source-ID und folgende Eigenschaften:
+Der Dienst verwendet die Notion Data-Source-ID und folgende Eigenschaften. Das optionale JSON-Feld `colorTheme` akzeptiert `ocean`, `forest`, `violet` oder `charcoal`; Standard ist `ocean`.
 
 - `Invoice` (Titel), `Invoice number` (Rich Text), `Original invoice number` (Rich Text), `Document type` (Select)
 - `Customer` (Rich Text), `Customer email` (E-Mail), `Invoice date` / `Due date` (Datum)
