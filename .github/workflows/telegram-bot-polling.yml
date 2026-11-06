@@ -1,6 +1,9 @@
 name: Rechnio Telegram bot polling
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     # GitHub may delay scheduled runs under load; avoid the top of the hour.
     - cron: "3/5 * * * *"
