@@ -208,7 +208,8 @@ export default {
 
     try {
       const response = await createMcpHandler(() => createServer(env), {
-        route: "/mcp"
+        route: "/mcp",
+        allowedOriginHostnames: ["glama.ai"]
       })(request, env, ctx);
       return withCors(response);
     } catch (error) {
