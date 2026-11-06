@@ -102,14 +102,22 @@ function createServer(env: Env) {
     "telegram_get_updates",
     {
       description: "Read recent messages delivered to this bot. This cannot read personal Telegram chats.",
+      description: "Read recent messages delivered to this bot. Pass offset as the last processed update_id plus 1 to avoid receiving the same updates again. This cannot read personal Telegram chats and requires that no Telegram webhook is active.",
       inputSchema: {
-        limit: z.number().int().min(1).max(20).default(10)
+        limit: z.number().int().min(1).max(20).default(10),
+        offset: z.number().int().min(0).optional()
       }
     },
-    async ({ limit }) => {
+    async ({ limit, offset }) => {
+      const webhook = await telegram(env, "getWebhookInfo") as { url?: string };
+      if (webhook.url) {
+        throw new Error("A Telegram webhook is active. getUpdates cannot be used while a webhook is configured. Remove or disable the webhook in your bot setup before calling telegram_get_updates.");
+      }
+
       const updates = await telegram(env, "getUpdates", {
         limit,
         timeout: 0,
+        ...(offset !== undefined ? { offset } : {}),
         allowed_updates: ["message"]
       });
       const messages = updates.map((u: any) => ({
