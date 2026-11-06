@@ -1,0 +1,27 @@
+name: Telegram service tests
+
+on:
+  pull_request:
+    paths:
+      - "telegram-mcp/**"
+      - ".github/workflows/telegram-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "telegram-mcp/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telegram-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: telegram-mcp/package-lock.json
+      - run: npm install --ignore-scripts
+      - run: npm test
