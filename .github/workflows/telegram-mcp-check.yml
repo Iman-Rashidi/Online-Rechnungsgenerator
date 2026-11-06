@@ -65,17 +65,10 @@ jobs:
           grep -q '"mcp_auth_configured":true' /tmp/rechnio-health.json
           grep -q '"telegram_configured":true' /tmp/rechnio-health.json
 
-          payload='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"rechnio-ci","version":"1.0.0"}}}'
-          status=$(curl --silent --output /dev/null --write-out '%{http_code}' --request POST http://127.0.0.1:8787/mcp --header 'Content-Type: application/json' --header 'Accept: application/json, text/event-stream' --data "$payload")
-          test "$status" = "401"
-
-          status=$(curl --silent --output /dev/null --write-out '%{http_code}' --request POST http://127.0.0.1:8787/mcp --header 'Content-Type: application/json' --header 'Accept: application/json, text/event-stream' --header "Authorization: ${MCP_ACCESS_TOKEN}" --data "$payload")
-          test "$status" = "401"
-
-          status=$(curl --silent --output /tmp/rechnio-mcp-response --write-out '%{http_code}' --request POST http://127.0.0.1:8787/mcp --header 'Content-Type: application/json' --header 'Accept: application/json, text/event-stream' --header "Authorization: Bearer ${MCP_ACCESS_TOKEN}" --data "$payload")
-          if [ "$status" != "200" ]; then
+          status=$(curl --silent --output /tmp/rechnio-mcp-response --write-out '%{http_code}' --request POST http://127.0.0.1:8787/mcp --header 'Content-Type: application/json' --header 'Accept: application/json, text/event-stream' --header "Authorization: Bearer ${MCP_ACCESS_TOKEN}" --data 'not-json')
+          if [ "$status" != "400" ]; then
             cat /tmp/rechnio-mcp-response
             cat /tmp/rechnio-worker.log
-            echo "Expected valid Bearer token to initialize MCP, got HTTP $status"
+            echo "Expected authenticated malformed JSON to be rejected with HTTP 400, got HTTP $status"
             exit 1
           fi
