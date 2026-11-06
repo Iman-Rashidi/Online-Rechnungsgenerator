@@ -30,3 +30,11 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run unit and PDF rendering tests
         run: npm test
+
+      - name: Upload sample invoice PDFs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rechnio-demo-pdfs
+          path: telegram-mcp/artifacts/*.pdf
+          if-no-files-found: warn
