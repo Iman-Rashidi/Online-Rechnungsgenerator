@@ -104,3 +104,22 @@ test('rejects unsupported and oversized company logos', async ({ page }) => {
   await expect(page.locator('#logoStatus')).toContainText('höchstens 2 MB');
   await expect(page.locator('#pCompanyLogo')).toBeHidden();
 });
+
+
+test('applies invoice color themes and places an uploaded company logo in the header', async ({ page }) => {
+  await page.goto(SITE, { waitUntil: 'networkidle' });
+  const preview = page.locator('#invoicePreview');
+  await expect(preview).toHaveClass(/theme-ocean/);
+  await expect(page.locator('#pDocumentTitle')).toHaveCSS('text-align', 'right');
+
+  for (const theme of ['forest', 'violet', 'charcoal', 'ocean']) {
+    await page.locator('#invoiceColor').selectOption(theme);
+    await expect(preview).toHaveClass(new RegExp('theme-' + theme));
+  }
+
+  const onePixelPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6fcAAAAASUVORK5CYII=', 'base64');
+  await page.locator('#companyLogo').setInputFiles({ name: 'company-logo.png', mimeType: 'image/png', buffer: onePixelPng });
+  await expect(page.locator('#pCompanyLogo')).toBeVisible();
+  await expect(page.locator('.invoice-brandmark')).toBeHidden();
+  await expect(preview).toHaveClass(/has-company-logo/);
+});

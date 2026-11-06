@@ -6,6 +6,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const appPath = resolve(here, "../../index.html");
 const VALID_TAX_RATES = new Set(["19", "7", "0", "none"]);
 const VALID_TEMPLATES = new Set(["classic", "modern", "compact"]);
+const VALID_COLOR_THEMES = new Set(["ocean", "forest", "violet", "charcoal"]);
 const VALID_MAHNUNG_LEVELS = new Set(["Reminder", "First Mahnung", "Second Mahnung", "Final Mahnung"]);
 
 function isIsoDate(value) {
@@ -17,10 +18,13 @@ function isIsoDate(value) {
 export function validateInvoice(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Das Rechnungsdatenformat ist ungültig.");
   for (const key of ["seller", "customer", "number", "date", "due"]) {
-    if (typeof input[key] !== "string" || !input[key].trim()) throw new Error("Pflichtfeld fehlt: " + key);
+    if (typeof input[key] !== "string" || !input[key].trim()) {
+      const fieldNames = { seller: "Absender", customer: "Kunde", number: "Rechnungsnummer", date: "Rechnungsdatum", due: "Fälligkeitsdatum" };
+      throw new Error("Pflichtfeld fehlt: " + (fieldNames[key] || key));
+    }
     if (input[key].length > 200) throw new Error("Ein Pflichtfeld überschreitet die zulässige Länge.");
   }
-  if (!isIsoDate(input.date) || !isIsoDate(input.due)) throw new Error("Das Rechnungs- oder Fälligkeitsdatum ist ungültig.");
+  if (!isIsoDate(input.date) || !isIsoDate(input.due)) throw new Error("Das Datum der Rechnung oder das Fälligkeitsdatum ist ungültig.");
   if (input.due < input.date) throw new Error("Das Fälligkeitsdatum darf nicht vor dem Rechnungsdatum liegen.");
   if (input.originalDue && !isIsoDate(input.originalDue)) throw new Error("Das ursprüngliche Fälligkeitsdatum ist ungültig.");
   if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 100) throw new Error("Eine Rechnung muss zwischen 1 und 100 Positionen enthalten.");
@@ -35,11 +39,12 @@ export function validateInvoice(input) {
     if (typeof input.originalInvoice !== "string" || !input.originalInvoice.trim()) throw new Error("Für eine Mahnung ist die Nummer der Originalrechnung erforderlich.");
     if (input.mahnungLevel && !VALID_MAHNUNG_LEVELS.has(input.mahnungLevel)) throw new Error("Die Mahnstufe ist ungültig.");
   }
-  if (input.template && !VALID_TEMPLATES.has(input.template)) throw new Error("Die Rechnungsvorlage ist ungültig.");
+  if (input.template && !VALID_TEMPLATES.has(input.template)) throw new Error("Die ausgewählte Vorlage ist ungültig.");
+  if (input.colorTheme && !VALID_COLOR_THEMES.has(input.colorTheme)) throw new Error("Die ausgewählte Farbgestaltung ist ungültig.");
   if (input.reminderFee !== undefined && (!Number.isFinite(Number(input.reminderFee)) || Number(input.reminderFee) < 0 || Number(input.reminderFee) > 1000000)) {
-    throw new Error("مبلغ جریمه Mahnung ist ungültig.");
+    throw new Error("Die Mahngebühr ist ungültig.");
   }
-  if (input.logoDataUrl !== undefined && typeof input.logoDataUrl !== "string") throw new Error("دادهٔ لوگو ist ungültig.");
+  if (input.logoDataUrl !== undefined && typeof input.logoDataUrl !== "string") throw new Error("Die Logodaten sind ungültig.");
   if (input.logoDataUrl && input.logoDataUrl.length > 2_800_000) throw new Error("Das Logo darf höchstens 2 MB groß sein.");
   return input;
 }
@@ -70,6 +75,7 @@ export async function renderInvoicePdf(raw) {
     }
     await page.locator("#taxRate").selectOption(String(input.taxRate ?? "19"));
     await page.locator("#invoiceTemplate").selectOption(input.template || "classic");
+    await page.locator("#invoiceColor").selectOption(input.colorTheme || "ocean");
     const firstRow = page.locator("#items .item").first();
     await firstRow.locator(".desc").fill(input.items[0].description);
     await firstRow.locator(".qty").fill(String(input.items[0].quantity));
@@ -83,13 +89,19 @@ export async function renderInvoicePdf(raw) {
     }
     if (input.logoDataUrl) {
       const match = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(input.logoDataUrl);
-      if (!match) throw new Error("فرمت لوگو ist ungültig.");
+      if (!match) throw new Error("Das Logoformat ist ungültig.");
       const buffer = Buffer.from(match[2], "base64");
       if (buffer.length > 2 * 1024 * 1024) throw new Error("Das Logo darf höchstens 2 MB groß sein.");
       const extension = match[1] === "jpeg" ? "jpg" : match[1];
       await page.locator("#companyLogo").setInputFiles({ name: "logo." + extension, mimeType: "image/" + match[1], buffer });
     }
-    await page.waitForTimeout(200);
+    if (input.logoDataUrl) {
+      await page.waitForFunction(() => {
+        const logo = document.querySelector("#pCompanyLogo");
+        return Boolean(logo && logo.complete && logo.naturalWidth > 0);
+      }, null, { timeout: 5000 });
+    }
+    await page.evaluate(() => document.fonts?.ready);
     const pdf = await page.pdf({
       format: "A4", printBackground: true, preferCSSPageSize: true,
       margin: { top: "0", right: "0", bottom: "0", left: "0" }
