@@ -7,6 +7,26 @@ interface Env {
   MCP_ACCESS_TOKEN: string;
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID",
+  "Access-Control-Expose-Headers": "Mcp-Session-Id, Mcp-Protocol-Version",
+  "Access-Control-Max-Age": "86400"
+};
+
+function withCors(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(CORS_HEADERS)) {
+    headers.set(key, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
 async function telegram(env: Env, method: string, payload: Record<string, unknown> = {}) {
   const response = await fetch(
     "https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/" + method,
@@ -134,18 +154,25 @@ export default {
       return new Response("Not found", { status: 404 });
     }
 
-    const supplied = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
+    // Browser preflight requests do not include the bearer token.
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+
+    const supplied = request.headers.get("Authorization")?.replace(/^Bearer\\s+/i, "").trim() ?? "";
     const expected = env.MCP_ACCESS_TOKEN?.trim() ?? "";
     if (!expected || supplied !== expected) {
-      return new Response("Unauthorized", { status: 401 });
+      return withCors(new Response("Unauthorized", { status: 401 }));
     }
 
     if (!env.TELEGRAM_BOT_TOKEN) {
-      return new Response("Telegram bot is not configured", { status: 503 });
+      return withCors(new Response("Telegram bot is not configured", { status: 503 }));
     }
 
-    return createMcpHandler(() => createServer(env), {
+    const response = await createMcpHandler(() => createServer(env), {
       route: "/mcp"
     })(request, env, ctx);
+
+    return withCors(response);
   }
 };
