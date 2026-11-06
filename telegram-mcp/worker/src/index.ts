@@ -159,7 +159,7 @@ export default {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
-    const supplied = request.headers.get("Authorization")?.replace(/^Bearer\\s+/i, "").trim() ?? "";
+    const supplied = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
     const expected = env.MCP_ACCESS_TOKEN?.trim() ?? "";
     if (!expected || supplied !== expected) {
       return withCors(new Response("Unauthorized", { status: 401 }));
