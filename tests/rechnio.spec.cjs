@@ -45,3 +45,62 @@ test('invoice and reminder interactions plus printable A4 PDF', async ({ page })
   expect(pdf.length).toBeGreaterThan(1000);
   expect(pageErrors).toEqual([]);
 });
+
+test('rounds invoice lines and tax to cents and renders descriptions as text', async ({ page }) => {
+  await page.goto(SITE, { waitUntil: 'networkidle' });
+  const row = page.locator('#items .item').first();
+  const description = '<img src=x onerror=window.__rechnioXss=true>';
+  await row.locator('.desc').fill(description);
+  await row.locator('.qty').fill('3');
+  await row.locator('.price').fill('0.10');
+
+  await expect(page.locator('#pNet')).toHaveText('0,30 €');
+  await expect(page.locator('#pTax')).toHaveText('0,06 €');
+  await expect(page.locator('#pTotal')).toHaveText('0,36 €');
+  await expect(page.locator('#pRows')).toContainText(description);
+  await expect(page.locator('#pRows img')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__rechnioXss)).toBeUndefined();
+
+  await page.locator('#taxRate').selectOption('7');
+  await expect(page.locator('#pTax')).toHaveText('0,02 €');
+  await expect(page.locator('#pTotal')).toHaveText('0,32 €');
+});
+
+test('uses the local calendar date and resets to a valid default document', async ({ page }) => {
+  await page.goto(SITE, { waitUntil: 'networkidle' });
+  const localToday = await page.evaluate(() => {
+    const date = new Date();
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0')
+    ].join('-');
+  });
+  await expect(page.locator('#date')).toHaveValue(localToday);
+  await page.locator('#date').fill('2020-01-02');
+  await page.locator('#reset').click();
+  await expect(page.locator('#date')).toHaveValue(localToday);
+  await expect(page.locator('#documentType')).toHaveValue('invoice');
+  await expect(page.locator('#items > *')).toHaveCount(1);
+  await expect(page.locator('#items .desc')).toHaveValue('Leistung');
+  await expect(page.locator('#paymentTerms')).toHaveValue(/14 Tagen/);
+});
+
+test('rejects unsupported and oversized company logos', async ({ page }) => {
+  await page.goto(SITE, { waitUntil: 'networkidle' });
+  await page.locator('#companyLogo').setInputFiles({
+    name: 'logo.svg',
+    mimeType: 'image/svg+xml',
+    buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
+  });
+  await expect(page.locator('#logoStatus')).toContainText('Ungültiges Format');
+  await expect(page.locator('#pCompanyLogo')).toBeHidden();
+
+  await page.locator('#companyLogo').setInputFiles({
+    name: 'large.png',
+    mimeType: 'image/png',
+    buffer: Buffer.alloc(2 * 1024 * 1024 + 1)
+  });
+  await expect(page.locator('#logoStatus')).toContainText('höchstens 2 MB');
+  await expect(page.locator('#pCompanyLogo')).toBeHidden();
+});

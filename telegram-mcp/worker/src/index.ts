@@ -7,6 +7,8 @@ interface Env {
   MCP_ACCESS_TOKEN: string;
 }
 
+const TELEGRAM_TIMEOUT_MS = 15_000;
+const MIN_ACCESS_TOKEN_LENGTH = 32;
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -27,22 +29,40 @@ function withCors(response: Response): Response {
   });
 }
 
+function tokenMatches(supplied: string, expected: string): boolean {
+  const encoder = new TextEncoder();
+  const left = encoder.encode(supplied);
+  const right = encoder.encode(expected);
+  let difference = left.length ^ right.length;
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    difference |= (left[index] ?? 0) ^ (right[index] ?? 0);
+  }
+  return difference === 0;
+}
+
 async function telegram(env: Env, method: string, payload: Record<string, unknown> = {}) {
+  const botToken = env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!botToken) throw new Error("Telegram bot is not configured.");
+
   const response = await fetch(
-    "https://api.telegram.org/bot" + env.TELEGRAM_BOT_TOKEN + "/" + method,
+    "https://api.telegram.org/bot" + botToken + "/" + method,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS)
     }
   );
-  const data = await response.json() as {
-    ok: boolean;
-    result?: any;
-    description?: string;
-  };
+
+  let data: { ok: boolean; result?: any; description?: string };
+  try {
+    data = await response.json() as { ok: boolean; result?: any; description?: string };
+  } catch {
+    throw new Error("Telegram API returned an invalid response.");
+  }
   if (!response.ok || !data.ok) {
-    throw new Error(data.description || "Telegram API request failed");
+    throw new Error(data.description || "Telegram API request failed.");
   }
   return data.result;
 }
@@ -50,7 +70,7 @@ async function telegram(env: Env, method: string, payload: Record<string, unknow
 function createServer(env: Env) {
   const server = new McpServer({
     name: "rechnio-telegram",
-    version: "0.1.0"
+    version: "0.1.1"
   });
 
   server.registerTool(
@@ -110,7 +130,7 @@ function createServer(env: Env) {
     async ({ limit, offset }) => {
       const webhook = await telegram(env, "getWebhookInfo") as { url?: string };
       if (webhook.url) {
-        throw new Error("A Telegram webhook is active. getUpdates cannot be used while a webhook is configured. Remove or disable the webhook in your bot setup before calling telegram_get_updates.");
+        throw new Error("A Telegram webhook is active. getUpdates cannot be used while a webhook is configured. Disable the webhook before calling telegram_get_updates.");
       }
 
       const updates = await telegram(env, "getUpdates", {
@@ -119,18 +139,18 @@ function createServer(env: Env) {
         ...(offset !== undefined ? { offset } : {}),
         allowed_updates: ["message"]
       });
-      const messages = updates.map((u: any) => ({
-        update_id: u.update_id,
-        message_id: u.message?.message_id,
-        date: u.message?.date,
-        chat_id: u.message?.chat?.id,
-        chat_type: u.message?.chat?.type,
-        sender: u.message?.from ? {
-          id: u.message.from.id,
-          first_name: u.message.from.first_name,
-          username: u.message.from.username
+      const messages = updates.map((update: any) => ({
+        update_id: update.update_id,
+        message_id: update.message?.message_id,
+        date: update.message?.date,
+        chat_id: update.message?.chat?.id,
+        chat_type: update.message?.chat?.type,
+        sender: update.message?.from ? {
+          id: update.message.from.id,
+          first_name: update.message.from.first_name,
+          username: update.message.from.username
         } : undefined,
-        text: u.message?.text
+        text: update.message?.text
       }));
       return {
         content: [{
@@ -147,13 +167,15 @@ function createServer(env: Env) {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const accessToken = env.MCP_ACCESS_TOKEN?.trim() ?? "";
+    const botToken = env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
 
     if (url.pathname === "/health") {
       return Response.json({
         ok: true,
         service: "rechnio-telegram-mcp",
-        mcp_auth_configured: Boolean(env.MCP_ACCESS_TOKEN?.trim()),
-        telegram_configured: Boolean(env.TELEGRAM_BOT_TOKEN?.trim())
+        mcp_auth_configured: accessToken.length >= MIN_ACCESS_TOKEN_LENGTH,
+        telegram_configured: Boolean(botToken)
       });
     }
 
@@ -161,25 +183,40 @@ export default {
       return new Response("Not found", { status: 404 });
     }
 
-    // Browser preflight requests do not include the bearer token.
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
-    const supplied = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
-    const expected = env.MCP_ACCESS_TOKEN?.trim() ?? "";
-    if (!expected || supplied !== expected) {
+    if (!["GET", "POST", "DELETE"].includes(request.method)) {
+      return withCors(new Response("Method not allowed", {
+        status: 405,
+        headers: { Allow: "GET, POST, DELETE, OPTIONS" }
+      }));
+    }
+
+    if (accessToken.length < MIN_ACCESS_TOKEN_LENGTH) {
+      return withCors(new Response("MCP access token is not configured correctly", { status: 503 }));
+    }
+
+    if (!tokenMatches(request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "", accessToken)) {
       return withCors(new Response("Unauthorized", { status: 401 }));
     }
 
-    if (!env.TELEGRAM_BOT_TOKEN) {
+    if (!botToken) {
       return withCors(new Response("Telegram bot is not configured", { status: 503 }));
     }
 
-    const response = await createMcpHandler(() => createServer(env), {
-      route: "/mcp"
-    })(request, env, ctx);
-
-    return withCors(response);
+    try {
+      const response = await createMcpHandler(() => createServer(env), {
+        route: "/mcp"
+      })(request, env, ctx);
+      return withCors(response);
+    } catch (error) {
+      console.error("MCP request failed:", error instanceof Error ? error.message : "Unknown error");
+      return withCors(new Response(JSON.stringify({ error: "MCP request failed" }), {
+        status: 500,
+        headers: { "content-type": "application/json; charset=utf-8" }
+      }));
+    }
   }
 };

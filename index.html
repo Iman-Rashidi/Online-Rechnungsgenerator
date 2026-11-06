@@ -47,7 +47,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:25px}
 <div class="field"><label for="seller">Name / Unternehmen</label><input id="seller" placeholder="Dein Name oder Unternehmen"></div>
 <div class="field"><label for="email">E-Mail</label><input id="email" type="email" placeholder="name@beispiel.de"></div>
 <div class="field full"><label for="sellerAddress">Anschrift</label><textarea id="sellerAddress" placeholder="Straße, PLZ und Ort"></textarea></div>
-<div class="field full"><label for="companyLogo">Firmenlogo (optional, PNG/JPG/WebP)</label><input id="companyLogo" type="file" accept="image/png,image/jpeg,image/webp"><small class="muted">Das Logo erscheint oben auf der Rechnung und wird beim Drucken/PDF übernommen.</small></div>
+<div class="field full"><label for="companyLogo">Firmenlogo (optional, PNG/JPG/WebP)</label><input id="companyLogo" type="file" accept="image/png,image/jpeg,image/webp"><small class="muted">Das Logo erscheint oben auf der Rechnung und wird beim Drucken/PDF übernommen.</small><small id="logoStatus" class="muted" role="status">Maximal 2 MB. Unterstützt: PNG, JPG und WebP.</small></div>
 <div class="field"><label for="taxNumber">Steuernummer (optional)</label><input id="taxNumber" placeholder="z. B. 123/456/78901"></div>
 <div class="field"><label for="vatId">USt-IdNr. (optional)</label><input id="vatId" placeholder="z. B. DE123456789"></div>
 <h2>Bankverbindung und Zahlung</h2>
@@ -66,7 +66,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:25px}
 <h2>Dokumenttyp</h2><div class="grid"><div class="field full"><label for="documentType">Dokument</label><select id="documentType"><option value="invoice">Rechnung</option><option value="mahnung">Mahnung / Zahlungserinnerung</option></select></div></div><h2 id="documentDetailsHeading">Rechnungsdetails</h2><div class="grid">
 <div class="field"><label for="number">Rechnungsnummer</label><input id="number" value="RE-2026-001"></div>
 <div class="field"><label for="date">Rechnungsdatum</label><input id="date" type="date"></div>
-<div class="field"><label for="due">Fällig am</label><input id="due" type="date"></div><div class="field mahnung-field" hidden><label for="originalInvoice">Ursprüngliche Rechnungsnummer</label><input id="originalInvoice" placeholder="z. B. RE-2026-001"></div><div class="field mahnung-field" hidden><label for="originalDue">Ursprünglich fällig am</label><input id="originalDue" type="date"></div><div class="field mahnung-field" hidden><label for="reminderFee">Mahngebühr (€)</label><input id="reminderFee" type="number" min="0" step="0.01" value="0"></div>
+<div class="field"><label for="due">Fällig am</label><input id="due" type="date"></div><div class="field mahnung-field" hidden><label for="originalInvoice">Ursprüngliche Rechnungsnummer</label><input id="originalInvoice" placeholder="z. B. RE-2026-001"></div><div class="field mahnung-field" hidden><label for="originalDue">Ursprünglich fällig am</label><input id="originalDue" type="date"></div><div class="field mahnung-field" hidden><label for="reminderFee">Mahngebühr (€)</label><input id="reminderFee" type="number" min="0" max="1000000" step="0.01" value="0"></div>
 <div class="field"><label for="taxRate">Umsatzsteuer</label><select id="taxRate"><option value="19">19 % (Regelsteuersatz)</option><option value="7">7 % (ermäßigt)</option><option value="0">0 % (nur wenn anwendbar)</option><option value="none">Keine Umsatzsteuer (§ 19 / steuerfrei)</option></select></div>
 <div class="field full"><label for="invoiceTemplate">Rechnungsvorlage</label><select id="invoiceTemplate"><option value="classic">Klassisch – Geschäftlich</option><option value="modern">Modern – Minimalistisch</option><option value="compact">Kompakt – Platzsparend</option></select></div>
 </div>
@@ -88,13 +88,268 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:25px}
 </section>
 </main><footer>Rechnio · Ein einfaches Werkzeug zur Rechnungserstellung</footer>
 <script>
-const $=id=>document.getElementById(id), fields=['seller','email','sellerAddress','taxNumber','vatId','bankName','accountHolder','iban','bic','paymentTerms','paymentLocation','customer','customerAddress','number','date','due','note','originalInvoice','originalDue','reminderFee'];
-const money=n=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(n);
-function addItem(desc='',qty=1,price=0){const row=document.createElement('div');row.className='item';row.innerHTML='<input aria-label="Beschreibung" class="desc" placeholder="z. B. Webdesign"><input aria-label="Menge" class="qty" type="number" min="0" step="any" value="'+qty+'"><input aria-label="Einzelpreis in Euro" class="price" type="number" min="0" step="0.01" value="'+price+'"><button class="remove" type="button" aria-label="Position entfernen">×</button>';row.querySelector('.desc').value=desc;row.addEventListener('input',render);row.querySelector('.remove').addEventListener('click',()=>{row.remove();render()});$('items').append(row);render()}
-function dateFmt(v){if(!v)return '-';const [y,m,d]=v.split('-');return d+'.'+m+'.'+y}
-function render(){const isMahnung=$('documentType').value==='mahnung';$('documentDetailsHeading').textContent=isMahnung?'Mahnung-Details':'Rechnungsdetails';$('pMahnungInfo').style.display=isMahnung?'block':'none';$('pMahnungInfo').textContent=isMahnung?'Bezug zur ursprünglichen Rechnung: '+($('originalInvoice').value||$('number').value)+($('originalDue').value?' · Ursprünglich fällig am: '+dateFmt($('originalDue').value):''):'';document.querySelectorAll('.mahnung-field').forEach(el=>el.hidden=!isMahnung);$('pDocumentTitle').textContent=isMahnung?'MAHNUNG':'RECHNUNG';fields.forEach(id=>{const target=({seller:'pSeller',email:'pEmail',sellerAddress:'pSellerAddress',taxNumber:'pTaxNumber',vatId:'pVatId',customer:'pCustomer',customerAddress:'pCustomerAddress',number:'pNumber',date:'pDate',due:'pDue',note:'pNote'})[id];if(!target)return;const el=$(target);if(id==='date'||id==='due')el.textContent=dateFmt($(id).value);else if(id==='taxNumber')el.textContent=$(id).value?'Steuernummer: '+$(id).value:'';else if(id==='vatId')el.textContent=$(id).value?'USt-IdNr.: '+$(id).value:'';else if(['bankName','accountHolder','iban','bic','paymentTerms'].includes(id)){}else el.textContent=$(id).value||({seller:'Dein Name oder Unternehmen',customer:'Kundenname',sellerAddress:'Deine Anschrift',note:'Vielen Dank für Ihren Auftrag.'}[id]||'')});
-$('pBank').textContent=$('bankName').value?'Bank: '+$('bankName').value:'';$('pHolder').textContent=$('accountHolder').value?'Kontoinhaber: '+$('accountHolder').value:'';$('pIban').textContent=$('iban').value?'IBAN: '+$('iban').value:'';$('pBic').textContent=$('bic').value?'BIC: '+$('bic').value:'';$('pTerms').textContent=$('paymentTerms').value;$('pPaymentLocation').textContent=$('paymentLocation').value?'Zahlungsort / Empfänger: '+$('paymentLocation').value:'';$('pPayment').style.display=[$('bankName').value,$('accountHolder').value,$('iban').value,$('bic').value,$('paymentTerms').value,$('paymentLocation').value].some(Boolean)?'block':'none';let net=0;$('pRows').innerHTML='';document.querySelectorAll('.item').forEach(r=>{const desc=r.querySelector('.desc').value||'Position';const q=Math.max(0,Number(r.querySelector('.qty').value)||0),p=Math.max(0,Number(r.querySelector('.price').value)||0),line=q*p;net+=line;const tr=document.createElement('tr');[desc,String(q),money(p),money(line)].forEach((v,i)=>{const td=document.createElement('td');td.textContent=v;if(i)td.className='num';tr.append(td)});$('pRows').append(tr)});const choice=$('taxRate').value,rate=choice==='none'?0:Number(choice),tax=net*rate/100,gross=net+tax+(isMahnung?Math.max(0,Number($('reminderFee').value)||0):0);$('pNet').textContent=money(net);$('pTax').textContent=money(tax);$('pTotal').textContent=money(gross);const fee=isMahnung?Math.max(0,Number($('reminderFee').value)||0):0;$('pTaxLabel').textContent=isMahnung?'Umsatzsteuer (laut ursprünglicher Rechnung)':(choice==='none'?'Umsatzsteuer (nicht ausgewiesen)':'Umsatzsteuer ('+rate+' %)');$('pReminderFeeRow').style.display=fee>0?'flex':'none';$('pReminderFee').textContent=money(fee);}
-fields.forEach(id=>$(id).addEventListener('input',render));$('taxRate').addEventListener('change',render);$('documentType').addEventListener('change',render);['originalInvoice','originalDue','reminderFee','paymentLocation'].forEach(id=>$(id).addEventListener('input',render));$('invoiceTemplate').addEventListener('change',()=>{$('invoicePreview').classList.remove('template-classic','template-modern','template-compact');$('invoicePreview').classList.add('template-'+$('invoiceTemplate').value)});$('add').addEventListener('click',()=>addItem());$('print').addEventListener('click',()=>window.print());$('reset').addEventListener('click',()=>{fields.forEach(id=>$(id).value='');$('companyLogo').value='';$('documentType').value='invoice';$('originalInvoice').value='';$('originalDue').value='';$('reminderFee').value='0';$('paymentLocation').value='';$('pCompanyLogo').removeAttribute('src');$('pCompanyLogo').style.display='none';$('number').value='RE-2026-001';$('taxRate').value='19';$('invoiceTemplate').value='classic';$('invoicePreview').classList.remove('template-modern','template-compact');$('invoicePreview').classList.add('template-classic');$('items').innerHTML='';addItem();render()});
-$('companyLogo').addEventListener('change',()=>{const file=$('companyLogo').files[0],img=$('pCompanyLogo');if(!file){img.removeAttribute('src');img.style.display='none';return}if(!file.type.startsWith('image/')){ $('companyLogo').value='';return }const reader=new FileReader();reader.onload=()=>{img.src=reader.result;img.style.display='block'};reader.readAsDataURL(file)});$('date').value=new Date().toISOString().slice(0,10);addItem('Leistung',1,0);render();
+const $ = id => document.getElementById(id);
+const fields = [
+  'seller', 'email', 'sellerAddress', 'taxNumber', 'vatId', 'bankName',
+  'accountHolder', 'iban', 'bic', 'paymentTerms', 'paymentLocation',
+  'customer', 'customerAddress', 'number', 'date', 'due', 'note',
+  'originalInvoice', 'originalDue', 'reminderFee'
+];
+const MAX_ITEMS = 100;
+const MAX_QUANTITY = 10000;
+const MAX_UNIT_PRICE = 100000;
+const money = value => new Intl.NumberFormat('de-DE', {
+  style: 'currency',
+  currency: 'EUR'
+}).format(value);
+const moneyFromCents = cents => money(cents / 100);
+const nonNegativeNumber = (value, max) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(max, Math.max(0, number)) : 0;
+};
+function localDateValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return year + '-' + month + '-' + day;
+}
+function updateAddButton() {
+  const atLimit = $('items').children.length >= MAX_ITEMS;
+  $('add').disabled = atLimit;
+  $('add').title = atLimit ? 'Maximal 100 Positionen pro Dokument.' : '';
+}
+function addItem(desc = '', qty = 1, price = 0) {
+  if ($('items').children.length >= MAX_ITEMS) {
+    updateAddButton();
+    return;
+  }
+  const row = document.createElement('div');
+  row.className = 'item';
+  row.innerHTML =
+    '<input aria-label="Beschreibung" class="desc" placeholder="z. B. Webdesign">' +
+    '<input aria-label="Menge" class="qty" type="number" min="0" max="' + MAX_QUANTITY + '" step="any">' +
+    '<input aria-label="Einzelpreis in Euro" class="price" type="number" min="0" max="' + MAX_UNIT_PRICE + '" step="0.01">' +
+    '<button class="remove" type="button" aria-label="Position entfernen">×</button>';
+  row.querySelector('.desc').value = String(desc);
+  row.querySelector('.qty').value = nonNegativeNumber(qty, MAX_QUANTITY);
+  row.querySelector('.price').value = nonNegativeNumber(price, MAX_UNIT_PRICE);
+  row.addEventListener('input', render);
+  row.querySelector('.remove').addEventListener('click', () => {
+    row.remove();
+    updateAddButton();
+    render();
+  });
+  $('items').append(row);
+  updateAddButton();
+  render();
+}
+function dateFmt(value) {
+  if (!value) return '-';
+  const [year, month, day] = value.split('-');
+  return day + '.' + month + '.' + year;
+}
+function render() {
+  const isMahnung = $('documentType').value === 'mahnung';
+  $('documentDetailsHeading').textContent = isMahnung ? 'Mahnung-Details' : 'Rechnungsdetails';
+  $('pMahnungInfo').style.display = isMahnung ? 'block' : 'none';
+  $('pMahnungInfo').textContent = isMahnung
+    ? 'Bezug zur ursprünglichen Rechnung: ' + ($('originalInvoice').value || $('number').value) +
+      ($('originalDue').value ? ' · Ursprünglich fällig am: ' + dateFmt($('originalDue').value) : '')
+    : '';
+  document.querySelectorAll('.mahnung-field').forEach(element => {
+    element.hidden = !isMahnung;
+  });
+  $('pDocumentTitle').textContent = isMahnung ? 'MAHNUNG' : 'RECHNUNG';
+
+  const previewTargets = {
+    seller: 'pSeller',
+    email: 'pEmail',
+    sellerAddress: 'pSellerAddress',
+    taxNumber: 'pTaxNumber',
+    vatId: 'pVatId',
+    customer: 'pCustomer',
+    customerAddress: 'pCustomerAddress',
+    number: 'pNumber',
+    date: 'pDate',
+    due: 'pDue',
+    note: 'pNote'
+  };
+  fields.forEach(id => {
+    const target = previewTargets[id];
+    if (!target) return;
+    const element = $(target);
+    const value = $(id).value;
+    if (id === 'date' || id === 'due') {
+      element.textContent = dateFmt(value);
+    } else if (id === 'taxNumber') {
+      element.textContent = value ? 'Steuernummer: ' + value : '';
+    } else if (id === 'vatId') {
+      element.textContent = value ? 'USt-IdNr.: ' + value : '';
+    } else {
+      const fallback = {
+        seller: 'Dein Name oder Unternehmen',
+        customer: 'Kundenname',
+        sellerAddress: 'Deine Anschrift',
+        note: 'Vielen Dank für Ihren Auftrag.'
+      }[id] || '';
+      element.textContent = value || fallback;
+    }
+  });
+
+  $('pBank').textContent = $('bankName').value ? 'Bank: ' + $('bankName').value : '';
+  $('pHolder').textContent = $('accountHolder').value ? 'Kontoinhaber: ' + $('accountHolder').value : '';
+  $('pIban').textContent = $('iban').value ? 'IBAN: ' + $('iban').value : '';
+  $('pBic').textContent = $('bic').value ? 'BIC: ' + $('bic').value : '';
+  $('pTerms').textContent = $('paymentTerms').value;
+  $('pPaymentLocation').textContent = $('paymentLocation').value
+    ? 'Zahlungsort / Empfänger: ' + $('paymentLocation').value
+    : '';
+  $('pPayment').style.display = [
+    $('bankName').value, $('accountHolder').value, $('iban').value,
+    $('bic').value, $('paymentTerms').value, $('paymentLocation').value
+  ].some(Boolean) ? 'block' : 'none';
+
+  let netCents = 0;
+  const rows = document.createDocumentFragment();
+  document.querySelectorAll('.item').forEach(row => {
+    const description = row.querySelector('.desc').value || 'Position';
+    const quantity = nonNegativeNumber(row.querySelector('.qty').value, MAX_QUANTITY);
+    const unitPrice = nonNegativeNumber(row.querySelector('.price').value, MAX_UNIT_PRICE);
+    const lineCents = Math.round(quantity * unitPrice * 100);
+    netCents += lineCents;
+
+    const tr = document.createElement('tr');
+    [description, String(quantity), money(unitPrice), moneyFromCents(lineCents)].forEach((value, index) => {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      if (index > 0) cell.className = 'num';
+      tr.append(cell);
+    });
+    rows.append(tr);
+  });
+  $('pRows').replaceChildren(rows);
+
+  const taxChoice = $('taxRate').value;
+  const taxRate = taxChoice === 'none' ? 0 : Number(taxChoice);
+  const taxCents = Math.round(netCents * taxRate / 100);
+  const reminderFeeCents = isMahnung
+    ? Math.round(nonNegativeNumber($('reminderFee').value, 1000000) * 100)
+    : 0;
+  const grossCents = netCents + taxCents + reminderFeeCents;
+
+  $('pNet').textContent = moneyFromCents(netCents);
+  $('pTax').textContent = moneyFromCents(taxCents);
+  $('pTotal').textContent = moneyFromCents(grossCents);
+  $('pTaxLabel').textContent = isMahnung
+    ? 'Umsatzsteuer (laut ursprünglicher Rechnung)'
+    : (taxChoice === 'none' ? 'Umsatzsteuer (nicht ausgewiesen)' : 'Umsatzsteuer (' + taxRate + ' %)');
+  $('pReminderFeeRow').style.display = reminderFeeCents > 0 ? 'flex' : 'none';
+  $('pReminderFee').textContent = moneyFromCents(reminderFeeCents);
+}
+
+fields.forEach(id => $(id).addEventListener('input', render));
+$('taxRate').addEventListener('change', render);
+$('documentType').addEventListener('change', render);
+$('invoiceTemplate').addEventListener('change', () => {
+  const preview = $('invoicePreview');
+  preview.classList.remove('template-classic', 'template-modern', 'template-compact');
+  preview.classList.add('template-' + $('invoiceTemplate').value);
+});
+$('add').addEventListener('click', () => addItem());
+$('print').addEventListener('click', () => window.print());
+$('reset').addEventListener('click', () => {
+  fields.forEach(id => $(id).value = '');
+  $('companyLogo').value = '';
+  $('logoStatus').textContent = 'Maximal 2 MB. Unterstützt: PNG, JPG und WebP.';
+  $('documentType').value = 'invoice';
+  $('originalInvoice').value = '';
+  $('originalDue').value = '';
+  $('reminderFee').value = '0';
+  $('paymentLocation').value = '';
+  $('paymentTerms').value = 'Bitte überweisen Sie den Rechnungsbetrag innerhalb von 14 Tagen.';
+  $('date').value = localDateValue();
+  $('pCompanyLogo').removeAttribute('src');
+  $('pCompanyLogo').style.display = 'none';
+  $('number').value = 'RE-2026-001';
+  $('taxRate').value = '19';
+  $('invoiceTemplate').value = 'classic';
+  $('invoicePreview').classList.remove('template-modern', 'template-compact');
+  $('invoicePreview').classList.add('template-classic');
+  $('items').replaceChildren();
+  addItem('Leistung', 1, 0);
+  render();
+});
+
+const ALLOWED_LOGO_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+function clearLogo() {
+  $('pCompanyLogo').removeAttribute('src');
+  $('pCompanyLogo').style.display = 'none';
+}
+async function hasValidLogoSignature(file) {
+  const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const startsWith = signature => signature.every((byte, index) => bytes[index] === byte);
+  const isPng = startsWith([137, 80, 78, 71, 13, 10, 26, 10]);
+  const isJpeg = startsWith([255, 216, 255]);
+  const isWebp = startsWith([82, 73, 70, 70]) &&
+    String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP';
+  return (file.type === 'image/png' && isPng) ||
+    (file.type === 'image/jpeg' && isJpeg) ||
+    (file.type === 'image/webp' && isWebp);
+}
+$('companyLogo').addEventListener('change', async () => {
+  const file = $('companyLogo').files[0];
+  const image = $('pCompanyLogo');
+  const status = $('logoStatus');
+  if (!file) {
+    clearLogo();
+    status.textContent = 'Maximal 2 MB. Unterstützt: PNG, JPG und WebP.';
+    return;
+  }
+  clearLogo();
+  if (!ALLOWED_LOGO_TYPES.has(file.type)) {
+    $('companyLogo').value = '';
+    status.textContent = 'Ungültiges Format. Bitte PNG, JPG oder WebP auswählen.';
+    return;
+  }
+  if (file.size > MAX_LOGO_BYTES) {
+    $('companyLogo').value = '';
+    status.textContent = 'Die Logo-Datei darf höchstens 2 MB groß sein.';
+    return;
+  }
+  try {
+    if (!(await hasValidLogoSignature(file))) {
+      $('companyLogo').value = '';
+      status.textContent = 'Die Datei ist kein gültiges PNG, JPG oder WebP.';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if ($('companyLogo').files[0] !== file) return;
+      if (typeof reader.result !== 'string') {
+        status.textContent = 'Das Logo konnte nicht gelesen werden.';
+        return;
+      }
+      image.src = reader.result;
+      image.style.display = 'block';
+      status.textContent = 'Logo erfolgreich geladen.';
+    };
+    reader.onerror = () => {
+      if ($('companyLogo').files[0] !== file) return;
+      clearLogo();
+      status.textContent = 'Das Logo konnte nicht gelesen werden.';
+    };
+    reader.readAsDataURL(file);
+  } catch (_error) {
+    $('companyLogo').value = '';
+    clearLogo();
+    status.textContent = 'Die Logo-Datei konnte nicht geprüft werden.';
+  }
+});
+
+$('date').value = localDateValue();
+addItem('Leistung', 1, 0);
+render();
 </script>
 </body></html>

@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: browser-tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   browser-test:
     runs-on: ubuntu-latest
@@ -21,10 +25,19 @@ jobs:
         with:
           node-version: 22
       - name: Install Playwright
-        run: npm install --no-save @playwright/test
+        run: npm install --no-save --no-audit --no-fund @playwright/test
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Start local web server
-        run: python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/rechnio-server.log 2>&1 &
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/rechnio-server.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/rechnio-server.log
+          exit 1
       - name: Run browser tests
         run: npx playwright test
