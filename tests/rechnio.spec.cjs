@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-const SITE = 'https://iman-rashidi.github.io/Online-Rechnungsgenerator/';
+const SITE = 'http://127.0.0.1:4173/';
 
 test('invoice and reminder interactions plus printable A4 PDF', async ({ page }) => {
   const pageErrors = [];
