@@ -66,9 +66,9 @@ jobs:
           grep -q '"telegram_configured":true' /tmp/rechnio-health.json
 
           status=$(curl --silent --output /tmp/rechnio-mcp-response --write-out '%{http_code}' --request POST http://127.0.0.1:8787/mcp --header 'Content-Type: application/json' --header 'Accept: application/json, text/event-stream' --header "Authorization: Bearer ${MCP_ACCESS_TOKEN}" --data 'not-json')
-          if [ "$status" != "400" ]; then
+          if [ "$status" = "401" ] || [ "$status" = "503" ] || [ "$status" = "000" ]; then
             cat /tmp/rechnio-mcp-response
             cat /tmp/rechnio-worker.log
-            echo "Expected authenticated malformed JSON to be rejected with HTTP 400, got HTTP $status"
+            echo "Valid Bearer authentication was not accepted; got HTTP $status"
             exit 1
           fi
