@@ -11,17 +11,17 @@ const good = {
 
 test("accepts a complete invoice payload", () => assert.equal(validateInvoice(good), good));
 test("rejects missing required fields", () => assert.throws(() => validateInvoice({ ...good, customer: "" }), /customer/));
-test("rejects empty or excessive item lists", () => assert.throws(() => validateInvoice({ ...good, items: [] }), /۱ تا ۱۰۰/));
-test("rejects negative quantities", () => assert.throws(() => validateInvoice({ ...good, items: [{ ...good.items[0], quantity: -1 }] }), /تعداد/));
+test("rejects empty or excessive item lists", () => assert.throws(() => validateInvoice({ ...good, items: [] }), /1 bis 100/));
+test("rejects negative quantities", () => assert.throws(() => validateInvoice({ ...good, items: [{ ...good.items[0], quantity: -1 }] }), /Menge/));
 test("rejects malformed dates and due dates before invoice date", () => {
-  assert.throws(() => validateInvoice({ ...good, date: "2026-02-30" }), /تاریخ/);
-  assert.throws(() => validateInvoice({ ...good, due: "2026-11-01" }), /سررسید/);
+  assert.throws(() => validateInvoice({ ...good, date: "2026-02-30" }), /Datum/);
+  assert.throws(() => validateInvoice({ ...good, due: "2026-11-01" }), /Fälligkeitsdatum/);
 });
 test("rejects unknown templates and tax rates", () => {
-  assert.throws(() => validateInvoice({ ...good, template: "unknown" }), /قالب/);
-  assert.throws(() => validateInvoice({ ...good, taxRate: "25" }), /مالیات/);
+  assert.throws(() => validateInvoice({ ...good, template: "unknown" }), /Vorlage/);
+  assert.throws(() => validateInvoice({ ...good, taxRate: "25" }), /Steuersatz/);
 });
 test("requires original invoice number and valid fee for reminders", () => {
-  assert.throws(() => validateInvoice({ ...good, documentType: "mahnung" }), /شماره فاکتور اصلی/);
-  assert.throws(() => validateInvoice({ ...good, documentType: "mahnung", originalInvoice: "RE-1", reminderFee: -1 }), /مبلغ جریمه/);
+  assert.throws(() => validateInvoice({ ...good, documentType: "mahnung" }), /Originalrechnung/);
+  assert.throws(() => validateInvoice({ ...good, documentType: "mahnung", originalInvoice: "RE-1", reminderFee: -1 }), /Mahngebühr/);
 });
