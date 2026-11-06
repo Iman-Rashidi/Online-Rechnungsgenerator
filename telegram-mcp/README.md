@@ -54,18 +54,23 @@ Der Dienst verwendet die Notion Data-Source-ID und folgende Eigenschaften. Das o
 
 Das PDF wird direkt über Telegram zugestellt und nicht öffentlich gehostet. Deshalb bleibt `PDF URL` leer.
 
-## Erforderliche Umgebungsvariablen
+## Konfiguration und erforderliche Variablen
 
-- `TELEGRAM_BOT_TOKEN`: Telegram-Bot-Token.
-- `TELEGRAM_WEBHOOK_SECRET`: Geheimnis zur Prüfung der Telegram-Webhooks.
-- `ALLOWED_TELEGRAM_USER_IDS`: erlaubte numerische Telegram-Benutzer-IDs, durch Kommas getrennt.
-- `MCP_ACCESS_TOKEN`: zufälliges Geheimnis mit mindestens 32 Zeichen.
-- `PUBLIC_BASE_URL`: öffentliche HTTPS-Adresse des Dienstes.
-- `NOTION_API_KEY`: Notion-Integrationsschlüssel.
-- `NOTION_DATA_SOURCE_ID`: ID der Rechnio-Datenquelle in Notion.
-- Optional: `PORT` (Standard 3000), `STATE_FILE` (Standard `./data/telegram-updates.json`).
+### Empfohlener Betrieb: GitHub-Actions-Polling
 
-Die Notion-Datenbank muss für die Integration freigegeben sein. Zugangsdaten ausschließlich im Secret Manager des Hosting-Anbieters speichern. Niemals Tokens in Git, Issues, Screenshots oder Chats veröffentlichen.
+Für den hostfreien Polling-Modus werden ausschließlich diese Repository-Secrets und Repository-Variablen verwendet:
+
+**Secrets:** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, `NOTION_API_KEY`.
+
+**Variablen:** `NOTION_DATA_SOURCE_ID` und `RECHNIO_TELEGRAM_POLLING_ENABLED`.
+
+Die genauen Einrichtungsschritte stehen im Abschnitt „Telegram-Bot ohne eigenen Server (GitHub Actions)“. Die Notion-Integration muss ausdrücklich Zugriff auf die Rechnio-Datenquelle erhalten.
+
+### Nur für den alternativen Node.js-Webhook-/MCP-Betrieb
+
+Dieser eigenständig gehostete Modus in `src/server.js` verwendet zusätzlich `TELEGRAM_WEBHOOK_SECRET`, `ALLOWED_TELEGRAM_USER_IDS`, `MCP_ACCESS_TOKEN` (mindestens 32 Zeichen), `PUBLIC_BASE_URL`, optional `PORT` (Standard 3000) und `STATE_FILE` (Standard `./data/telegram-updates.json`). Die Notion-Verbindung verwendet weiterhin `NOTION_API_KEY` und `NOTION_DATA_SOURCE_ID`.
+
+Zugangsdaten ausschließlich in GitHub Secrets oder im Secret Manager des jeweiligen Hosting-Anbieters speichern. Niemals Tokens in Git, Issues, Screenshots oder Chats veröffentlichen.
 
 ## Telegram-Bot ohne eigenen Server (GitHub Actions)
 
@@ -89,11 +94,11 @@ Danach die Repository-Variable `RECHNIO_TELEGRAM_POLLING_ENABLED` auf `true` set
 
 Der Workflow ist standardmäßig deaktiviert, bis diese Variable auf `true` gesetzt wird. Dadurch entstehen keine fehlgeschlagenen Läufe, solange die Secrets noch nicht eingetragen sind. Der GitHub Actions Cache speichert ausschließlich die numerische Telegram-Update-ID; keine Zugangsdaten oder Rechnungs-PDFs werden dort abgelegt.
 
-## Bereitstellung
+## Bereitstellung des alternativen Webhook-/MCP-Servers
 
-Benötigt werden Node.js 20+, Chromium-Unterstützung, HTTPS und ein dauerhaftes Dateisystem für `STATE_FILE`. Anschließend `npm install` und `npm start` ausführen. Der Health-Check ist unter `GET /health` erreichbar.
+Dieser Abschnitt gilt nur, wenn statt GitHub-Actions-Polling ein dauerhaft laufender Node.js-Dienst verwendet werden soll. Benötigt werden Node.js 20+, Chromium-Unterstützung, HTTPS und ein dauerhaftes Dateisystem für `STATE_FILE`. Anschließend `npm install` und `npm start` ausführen. Der Health-Check ist unter `GET /health` erreichbar.
 
-Nach der Bereitstellung den Webhook einmalig über einen authentifizierten POST-Aufruf an `/admin/set-webhook` aktivieren. Der Header lautet `Authorization: Bearer <MCP_ACCESS_TOKEN>`.
+Nach der Bereitstellung den Webhook einmalig über einen authentifizierten POST-Aufruf an `/admin/set-webhook` aktivieren. Der Header lautet `Authorization: Bearer <MCP_ACCESS_TOKEN>`. Webhook und Polling dürfen für denselben Telegram-Bot nicht gleichzeitig aktiv sein. Für den empfohlenen GitHub-Actions-Polling-Modus ist diese Serverbereitstellung nicht erforderlich.
 
 ## Tests
 
