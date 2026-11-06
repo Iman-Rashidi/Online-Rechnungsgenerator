@@ -50,18 +50,24 @@ export async function renderInvoicePdf(raw) {
   try {
     const page = await browser.newPage({ locale: "de-DE" });
     await page.goto(pathToFileURL(appPath).href, { waitUntil: "load" });
+    const documentType = input.documentType || "invoice";
+    await page.locator("#documentType").selectOption(documentType);
     const textFields = {
       seller: input.seller, email: input.email, sellerAddress: input.sellerAddress,
       taxNumber: input.taxNumber, vatId: input.vatId, bankName: input.bankName,
       accountHolder: input.accountHolder, iban: input.iban, bic: input.bic,
       paymentTerms: input.paymentTerms, paymentLocation: input.paymentLocation,
       customer: input.customer, customerAddress: input.customerAddress,
-      number: input.number, date: input.date, due: input.due, note: input.note || "",
-      originalInvoice: input.originalInvoice || "", originalDue: input.originalDue || "",
-      reminderFee: String(input.reminderFee ?? 0)
+      number: input.number, date: input.date, due: input.due, note: input.note || ""
     };
-    for (const [id, value] of Object.entries(textFields)) await page.locator("#" + id).fill(String(value ?? ""));
-    await page.locator("#documentType").selectOption(input.documentType || "invoice");
+    for (const [id, value] of Object.entries(textFields)) {
+      await page.locator("#" + id).fill(String(value ?? ""));
+    }
+    if (documentType === "mahnung") {
+      await page.locator("#originalInvoice").fill(input.originalInvoice);
+      await page.locator("#originalDue").fill(input.originalDue || "");
+      await page.locator("#reminderFee").fill(String(input.reminderFee ?? 0));
+    }
     await page.locator("#taxRate").selectOption(String(input.taxRate ?? "19"));
     await page.locator("#invoiceTemplate").selectOption(input.template || "classic");
     const firstRow = page.locator("#items .item").first();
