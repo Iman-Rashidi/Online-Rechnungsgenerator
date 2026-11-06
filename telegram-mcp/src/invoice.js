@@ -52,9 +52,12 @@ export async function renderInvoicePdf(raw) {
       await row.locator(".price").fill(String(item.unitPrice));
     }
     if (input.logoDataUrl && /^data:image\/(png|jpeg|webp);base64,/.test(input.logoDataUrl)) {
-      const buffer = Buffer.from(input.logoDataUrl.split(",")[1], "base64");
+      const match = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(input.logoDataUrl);
+      if (!match) throw new Error("فرمت لوگو معتبر نیست.");
+      const buffer = Buffer.from(match[2], "base64");
       if (buffer.length > 2 * 1024 * 1024) throw new Error("لوگو حداکثر باید ۲ مگابایت باشد.");
-      await page.locator("#companyLogo").setInputFiles({ name: "logo.png", mimeType: "image/png", buffer });
+      const extension = match[1] === "jpeg" ? "jpg" : match[1];
+      await page.locator("#companyLogo").setInputFiles({ name: "logo." + extension, mimeType: "image/" + match[1], buffer });
     }
     await page.waitForTimeout(150);
     const pdf = await page.pdf({ format: "A4", printBackground: true, preferCSSPageSize: true, margin: { top: "0", right: "0", bottom: "0", left: "0" } });
