@@ -27,6 +27,7 @@ function tokenMatches(candidate) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+function createMcpServer() {
 const server = new McpServer({ name: "rechnio-telegram", version: "0.1.0" });
 
 server.registerTool("telegram_get_me", {
@@ -72,6 +73,9 @@ server.registerTool("telegram_get_updates", {
   return { content: [{ type: "text", text: JSON.stringify(messages, null, 2) }] };
 });
 
+return server;
+}
+
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "1mb" }));
@@ -83,7 +87,8 @@ app.all("/mcp", async (req, res) => {
   try {
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on("close", () => transport.close());
-    await server.connect(transport);
+    const requestServer = createMcpServer();
+    await requestServer.connect(transport);
     await transport.handleRequest(req, res, req.body);
   } catch (error) {
     console.error("MCP request failed:", error.message);
