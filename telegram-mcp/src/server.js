@@ -109,11 +109,16 @@ app.post("/telegram/webhook", async (req, res) => {
     try { payload = JSON.parse(raw); }
     catch { await telegram("sendMessage", { chat_id: chat.id, text: "JSON قابل خواندن نیست. ساختار نمونهٔ README را رعایت کنید." }); return; }
     const { pdf, totals } = await renderInvoicePdf(payload);
-    const notion = await saveInvoiceToNotion(payload, totals);
     const filename = (String(payload.number || "Rechnio").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 70) || "Rechnio") + ".pdf";
     await sendDocument(chat.id, pdf, filename, "Rechnio · PDF erstellt. Brutto: " + totals.gross.toFixed(2) + " EUR");
-    if (notion.skipped) await telegram("sendMessage", { chat_id: chat.id, text: "Hinweis: PDF wurde gesendet. Notion ist noch nicht verbunden, daher wurde kein Datensatz gespeichert." });
-    else await telegram("sendMessage", { chat_id: chat.id, text: "Auch in Notion gespeichert: " + notion.url });
+    try {
+      const notion = await saveInvoiceToNotion(payload, totals);
+      if (notion.skipped) await telegram("sendMessage", { chat_id: chat.id, text: "PDF ارسال شد؛ اتصال Notion هنوز تنظیم نشده است." });
+      else await telegram("sendMessage", { chat_id: chat.id, text: "PDF ارسال شد و در Notion ثبت شد: " + notion.url });
+    } catch (notionError) {
+      console.error("Notion save failed:", notionError instanceof Error ? notionError.message : "Unknown error");
+      await telegram("sendMessage", { chat_id: chat.id, text: "PDF ارسال شد، اما ثبت در Notion ناموفق بود. تنظیمات اتصال Notion را بررسی کنید." });
+    }
   } catch (error) {
     console.error("Invoice processing failed:", error instanceof Error ? error.message : "Unknown error");
     try { await telegram("sendMessage", { chat_id: chat.id, text: "Die Rechnung konnte nicht erstellt werden. Bitte Eingaben prüfen oder später erneut versuchen." }); } catch {}
