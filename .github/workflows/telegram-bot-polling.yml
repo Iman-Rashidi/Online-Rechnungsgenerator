@@ -2,7 +2,7 @@ name: Rechnio Telegram bot polling
 
 on:
   schedule:
-    # GitHub schedules can be delayed under load; avoid the top of the hour.
+    # GitHub may delay scheduled runs under load; avoid the top of the hour.
     - cron: "3/5 * * * *"
   workflow_dispatch:
 
@@ -14,10 +14,38 @@ permissions:
   contents: read
 
 jobs:
-  poll:
-    if: ${{ vars.RECHNIO_TELEGRAM_POLLING_ENABLED == 'true' }}
+  check-config:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
+      NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+    steps:
+      - name: Check whether production secrets are configured
+        id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -n "$TELEGRAM_BOT_TOKEN" ]] || missing+=("TELEGRAM_BOT_TOKEN")
+          [[ -n "$TELEGRAM_ALLOWED_USER_IDS" ]] || missing+=("TELEGRAM_ALLOWED_USER_IDS")
+          [[ -n "$NOTION_API_KEY" ]] || missing+=("NOTION_API_KEY")
+
+          if (( ${#missing[@]} > 0 )); then
+            echo "Production polling is paused. Missing repository secrets: ${missing[*]}"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Production secrets are present. Values are not printed."
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  poll:
+    needs: check-config
+    if: needs.check-config.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: telegram-mcp
@@ -25,7 +53,7 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
       NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-      NOTION_DATA_SOURCE_ID: ${{ vars.NOTION_DATA_SOURCE_ID }}
+      NOTION_DATA_SOURCE_ID: b2685397-3058-4bde-b9ef-4e51c8d63aa2
       STATE_FILE: data/telegram-updates.json
 
     steps:
@@ -44,7 +72,7 @@ jobs:
           key: rechnio-telegram-npm-${{ runner.os }}-${{ hashFiles('telegram-mcp/package.json') }}
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Cache Playwright Chromium
         uses: actions/cache@v4
