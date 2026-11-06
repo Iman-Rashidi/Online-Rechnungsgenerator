@@ -12,9 +12,10 @@ A small, self-hostable MCP server that connects ChatGPT-compatible MCP clients t
 ## Security
 
 - Never commit your Telegram bot token or the MCP access token.
-- Set both as environment variables on the host:
+- Set both as secrets on the host:
   - `TELEGRAM_BOT_TOKEN`
-  - `MCP_ACCESS_TOKEN`
+  - `MCP_ACCESS_TOKEN` (at least 32 characters; send it only as an `Authorization: Bearer <token>` header)
+- The MCP access token must be a long, randomly generated secret. Never put it in source code, GitHub Issues, logs, screenshots, or chat messages.
 - The server only controls the configured bot. It cannot read personal Telegram chats.
 - Start with a private bot chat. Do not add the bot to groups until its privacy and permissions are understood.
 
