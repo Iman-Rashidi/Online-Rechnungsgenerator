@@ -6,7 +6,8 @@ import { dirname, resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
-import { renderInvoicePdf, validateInvoice } from "./invoice.js";
+import { renderInvoicePdf } from "./invoice.js";
+import { handleTelegramUpdate } from "./poll.js";
 import { getInvoiceFromNotion, saveInvoiceToNotion, updateInvoiceStatus } from "./notion.js";
 
 const TELEGRAM_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
@@ -52,12 +53,14 @@ function tokenMatches(candidate, expected) {
 }
 
 const processed = new Set();
+const conversations = {};
 const inFlight = new Set();
 
 async function loadState() {
   try {
     const saved = JSON.parse(await readFile(STATE_FILE, "utf8"));
     for (const id of saved.processed || []) processed.add(String(id));
+    Object.assign(conversations, saved.conversations && typeof saved.conversations === "object" ? saved.conversations : {});
   } catch (error) {
     if (error.code !== "ENOENT") console.error("Could not read webhook state.");
   }
@@ -66,7 +69,7 @@ async function loadState() {
 async function saveState() {
   await mkdir(dirname(STATE_FILE), { recursive: true });
   const tempFile = STATE_FILE + ".tmp";
-  await writeFile(tempFile, JSON.stringify({ processed: [...processed].slice(-5000) }), { mode: 0o600 });
+  await writeFile(tempFile, JSON.stringify({ processed: [...processed].slice(-5000), conversations }), { mode: 0o600 });
   const { rename } = await import("node:fs/promises");
   await rename(tempFile, STATE_FILE);
 }
@@ -168,29 +171,16 @@ app.post("/telegram/webhook", async (req, res) => {
 
   inFlight.add(updateId);
   try {
-    const command = String(message.text || "").trim();
-    if (command === "/start" || command === "/help") {
-      await reply(chat.id, "Rechnio ist bereit.\n\nPDF-Rechnung erstellen:\n/invoice gefolgt von den vollständigen Rechnungsdaten als JSON\n\nRechnung als bezahlt markieren:\n/paid RE-2026-001\n\nAls an den Kunden versendet markieren:\n/sent RE-2026-001\n\nAls überfällig markieren:\n/overdue RE-2026-001\n\nRechnung stornieren:\n/cancelled RE-2026-001\n\nEin vollständiges JSON-Beispiel finden Sie in der README des GitHub-Projekts.");
-    } else {
-      const statusCommand = /^\/(paid|sent|overdue|cancelled)(?:@[A-Za-z0-9_]+)?\s+([A-Za-z0-9._/-]{1,80})$/i.exec(command);
-      if (statusCommand) {
-        const status = ({ paid: "Paid", sent: "Sent", overdue: "Overdue", cancelled: "Cancelled" })[statusCommand[1].toLowerCase()];
-        const updated = await updateInvoiceStatus(statusCommand[2], status);
-        await reply(chat.id, updated.skipped ? "Die Notion-Verbindung ist noch nicht eingerichtet." : "Der Rechnungsstatus wurde auf „" + status + "“ gesetzt: " + updated.url);
-      } else if (command.startsWith("/invoice")) {
-        const raw = command.slice("/invoice".length).trim();
-        if (!raw) {
-          await reply(chat.id, "Bitte senden Sie nach /invoice die Rechnungsdaten als JSON. Ein vollständiges Beispiel finden Sie in der README.");
-        } else {
-          let payload;
-          try { payload = JSON.parse(raw); }
-          catch { await reply(chat.id, "Das JSON-Format ist ungültig. Bitte verwenden Sie die Struktur aus dem README-Beispiel."); payload = null; }
-          if (payload) await processInvoice(chat.id, payload);
-        }
-      } else {
-        await reply(chat.id, "Für Hilfe senden Sie /help.");
-      }
-    }
+    await handleTelegramUpdate(update, {
+      allowedUserIds: ALLOWED_TELEGRAM_USER_IDS,
+      conversations,
+      reply,
+      sendDocument,
+      renderInvoicePdf,
+      getInvoiceFromNotion,
+      saveInvoiceToNotion,
+      updateInvoiceStatus
+    });
     processed.add(updateId);
     await saveState();
     res.sendStatus(200);
