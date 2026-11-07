@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
+    "start:oracle": "node src/always-on.js",
     "dev": "node --watch src/server.js",
     "test": "node --test",
     "postinstall": "playwright install chromium"
