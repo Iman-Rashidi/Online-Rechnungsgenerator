@@ -6,8 +6,8 @@ import { renderInvoicePdf } from "../src/invoice.js";
 
 test("renders invoice and Mahnung PDFs using the existing Rechnio page", async () => {
   const base = {
-    seller: "Rechnio Test GmbH",
-    sellerAddress: "Teststraße 1, 50667 Köln",
+    seller: "Musterfirma GmbH",
+    sellerAddress: "Musterstraße 1, 50667 Köln",
     customer: "Musterkunde GmbH",
     customerAddress: "Beispielweg 2, 50668 Köln",
     number: "RE-TEST-001",
