@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { renderInvoicePdf } from "./invoice.js";
 import { getInvoiceFromNotion, saveInvoiceToNotion, updateInvoiceStatus } from "./notion.js";
 
-const HELP_TEXT = ["Rechnio ist bereit.", "", "Neue Rechnung Schritt für Schritt erstellen: /invoice", "Sie brauchen kein JSON. Antworten Sie einfach auf die Fragen des Bots.", "Abbrechen: /cancel", "", "Rechnung als bezahlt markieren: /paid RE-2026-001", "Als versendet markieren: /sent RE-2026-001", "Als überfällig markieren: /overdue RE-2026-001", "Rechnung stornieren: /cancelled RE-2026-001"].join("\n");
+const HELP_TEXT = ["Rechnio ist bereit.", "", "Neue Rechnung mit einem Formular erstellen: /invoice", "Senden Sie alle Rechnungsangaben in EINER Nachricht. Netto, MwSt. und Brutto werden automatisch berechnet.", "Abbrechen: /cancel", "", "Rechnung als bezahlt markieren: /paid RE-2026-001", "Als versendet markieren: /sent RE-2026-001", "Als überfällig markieren: /overdue RE-2026-001", "Rechnung stornieren: /cancelled RE-2026-001"].join("\n");
 
 function safeError(error) {
   return String(error instanceof Error ? error.message : "Unbekannter Fehler.").slice(0, 300);
@@ -131,13 +131,13 @@ function invoiceSummary(data) {
   const rate = data.taxRate === "none" ? 0 : Number(data.taxRate);
   const tax = net * rate / 100;
   const gross = net + tax;
-  return "🧾 Bitte prüfen Sie Ihre Rechnung:\\n\\n" +
-    "Absender: " + data.seller + "\\nAdresse: " + data.sellerAddress + "\\n" +
-    "Empfänger: " + data.customer + "\\nAdresse: " + data.customerAddress + "\\n" +
-    "Rechnungsnummer: " + data.number + "\\nDatum: " + data.date + "\\nFällig: " + data.due + "\\n" +
-    "Beschreibung: " + item.description + "\\nMenge: " + item.quantity + "\\nEinzelpreis: " + item.unitPrice.toFixed(2) + " EUR\\n" +
-    "Netto: " + net.toFixed(2) + " EUR\\nMwSt.: " + tax.toFixed(2) + " EUR (" + (data.taxRate === "none" ? "keine" : data.taxRate + " %") + ")\\n" +
-    "Brutto: " + gross.toFixed(2) + " EUR\\n\\nAntworten Sie mit JA, um die PDF-Rechnung zu erstellen, oder NEIN zum Abbrechen.";
+  return "🧾 Bitte prüfen Sie Ihre Rechnung:\n\n" +
+    "Absender: " + data.seller + "\nAdresse: " + data.sellerAddress + "\n" +
+    "Empfänger: " + data.customer + "\nAdresse: " + data.customerAddress + "\n" +
+    "Rechnungsnummer: " + data.number + "\nDatum: " + data.date + "\nFällig: " + data.due + "\n" +
+    "Beschreibung: " + item.description + "\nMenge: " + item.quantity + "\nEinzelpreis: " + item.unitPrice.toFixed(2) + " EUR\n" +
+    "Netto: " + net.toFixed(2) + " EUR\nMwSt.: " + tax.toFixed(2) + " EUR (" + (data.taxRate === "none" ? "keine" : data.taxRate + " %") + ")\n" +
+    "Brutto: " + gross.toFixed(2) + " EUR\n\nAntworten Sie mit JA, um die PDF-Rechnung zu erstellen, oder NEIN zum Abbrechen.";
 }
 
 async function handleInvoiceWizard(chatId, text, deps) {
@@ -153,8 +153,8 @@ async function handleInvoiceWizard(chatId, text, deps) {
   if (/^\/invoice(?:@\w+)?$/i.test(text)) {
     conversations[key] = { awaitingData: true };
     await deps.reply(chatId,
-      "🧾 Rechnung erstellen\\n\\nBitte kopieren Sie diese Vorlage, füllen Sie alle Angaben aus und senden Sie sie komplett in EINER Nachricht. Sie müssen nicht auf einzelne Fragen warten.\\n\\n" +
-      INVOICE_TEMPLATE + "\\n\\nBeispiel für Zahlen: Menge 2, Einzelpreis 49,90.\\nNetto, MwSt. und Brutto werden automatisch berechnet.\\n\\nAbbrechen: /cancel");
+      "🧾 Rechnung erstellen\n\nBitte kopieren Sie diese Vorlage, füllen Sie alle Angaben aus und senden Sie sie komplett in EINER Nachricht. Sie müssen nicht auf einzelne Fragen warten.\n\n" +
+      INVOICE_TEMPLATE + "\n\nBeispiel für Zahlen: Menge 2, Einzelpreis 49,90.\nNetto, MwSt. und Brutto werden automatisch berechnet.\n\nAbbrechen: /cancel");
     return { handled: true, action: "invoice-form-start" };
   }
   if (!flow) return null;
@@ -177,7 +177,7 @@ async function handleInvoiceWizard(chatId, text, deps) {
   if (flow.awaitingData) {
     const parsed = parseInvoiceMessage(text);
     if (parsed.error) {
-      await deps.reply(chatId, "Die Angaben konnten noch nicht vollständig gelesen werden.\\n" + parsed.error + "\\n\\nBitte senden Sie die vollständige Vorlage in einer Nachricht.");
+      await deps.reply(chatId, "Die Angaben konnten noch nicht vollständig gelesen werden.\n" + parsed.error + "\n\nBitte senden Sie die vollständige Vorlage in einer Nachricht.");
       return { handled: true, action: "invoice-form-invalid" };
     }
     conversations[key] = { awaitingConfirmation: true, data: parsed.data };
