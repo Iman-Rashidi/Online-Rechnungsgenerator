@@ -1,0 +1,19 @@
+services:
+  - type: worker
+    name: rechnio-telegram-worker
+    runtime: node
+    plan: starter
+    region: frankfurt
+    branch: main
+    buildCommand: cd telegram-mcp && npm install --no-audit --no-fund && npx playwright install --with-deps chromium
+    startCommand: cd telegram-mcp && npm run start:oracle
+    autoDeploy: true
+    disk:
+      name: rechnio-telegram-state
+      mountPath: /opt/render/project/src/telegram-mcp/data
+      sizeGB: 1
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_ALLOWED_USER_IDS
+        sync: false
