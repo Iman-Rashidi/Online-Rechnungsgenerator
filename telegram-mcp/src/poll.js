@@ -94,7 +94,7 @@ function invoiceSummary(data) {
     "\nFälligkeitsdatum: " + formatGermanDate(data.due) + "\n\nPositionen:\n" + positions +
     "\n\nNetto: " + net.toFixed(2) + " EUR\nMwSt.: " + tax.toFixed(2) + " EUR (" +
     (data.taxRate === "none" ? "keine" : data.taxRate + " %") + ")\nBrutto: " + gross.toFixed(2) +
-    " EUR\n\nLayout: " + data.template + "\nFarbe: " + data.colorTheme +
+    " EUR\n\nLayout: " + ({ classic: "klassisch", modern: "modern", compact: "kompakt" })[data.template] + "\nFarbe: " + ({ ocean: "ozeanblau", forest: "waldgrün", violet: "violett", charcoal: "schiefergrau" })[data.colorTheme] +
     "\n\nAntworten Sie mit JA, um die PDF-Rechnung zu erstellen, oder NEIN zum Abbrechen.";
 }
 
