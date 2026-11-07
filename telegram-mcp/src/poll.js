@@ -69,7 +69,7 @@ const WIZARD_FIELDS = [
 ];
 
 function germanDate(value) {
-  const match = /^(\\d{1,2})\\.(\\d{1,2})\\.(\\d{4})$/.exec(value.trim());
+  const match = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(value.trim());
   if (!match) return null;
   const date = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
   if (date.getFullYear() !== Number(match[3]) || date.getMonth() !== Number(match[2]) - 1 || date.getDate() !== Number(match[1])) return null;
@@ -84,7 +84,7 @@ async function handleInvoiceWizard(chatId, text, deps) {
     await deps.reply(chatId, "Die Rechnungserstellung wurde abgebrochen.");
     return { handled: true, action: "invoice-cancelled" };
   }
-  if (/^\\/invoice(?:@\\w+)?$/i.test(text)) {
+  if (/^\/invoice(?:@\w+)?$/i.test(text)) {
     flow = { step: 0, data: {} };
     conversations[String(chatId)] = flow;
     await deps.reply(chatId, "🧾 Rechnung erstellen\n\nWir gehen die Angaben Schritt für Schritt durch. Sie brauchen kein JSON.\n\n" + WIZARD_FIELDS[0][1] + "\n\nZum Abbrechen: /cancel");
