@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { renderInvoicePdf } from "./invoice.js";
 import { getInvoiceFromNotion, saveInvoiceToNotion, updateInvoiceStatus } from "./notion.js";
 
-const HELP_TEXT = ["Rechnio ist bereit.", "", "Neue Rechnung mit einem Formular erstellen: /invoice", "Senden Sie alle Rechnungsangaben in EINER Nachricht. Netto, MwSt. und Brutto werden automatisch berechnet.", "Abbrechen: /cancel", "", "Rechnung als bezahlt markieren: /paid RE-2026-001", "Als versendet markieren: /sent RE-2026-001", "Als überfällig markieren: /overdue RE-2026-001", "Rechnung stornieren: /cancelled RE-2026-001"].join("\n");
+const HELP_TEXT = ["Rechnio ist bereit.", "", "Neue Rechnung Schritt für Schritt erstellen: /invoice", "Ich frage alle Angaben einzeln ab. Mehrere Rechnungspositionen sind möglich. Netto, MwSt. und Brutto werden automatisch berechnet.", "Abbrechen: /cancel", "", "Rechnung als bezahlt markieren: /paid RE-2026-001", "Als versendet markieren: /sent RE-2026-001", "Als überfällig markieren: /overdue RE-2026-001", "Rechnung stornieren: /cancelled RE-2026-001"].join("\n");
 
 function safeError(error) {
   return String(error instanceof Error ? error.message : "Unbekannter Fehler.").slice(0, 300);
@@ -54,19 +54,16 @@ async function processInvoice(chatId, payload, deps) {
   }
 }
 
-const INVOICE_TEMPLATE = [
-  "Absender:",
-  "Adresse Absender:",
-  "Empfänger:",
-  "Adresse Empfänger:",
-  "Rechnungsnummer:",
-  "Rechnungsdatum (TT.MM.JJJJ):",
-  "Fälligkeitsdatum (TT.MM.JJJJ):",
-  "Beschreibung:",
-  "Menge:",
-  "Einzelpreis EUR:",
-  "Umsatzsteuer (19, 7, 0 oder keine):"
-].join("\n");
+const WIZARD_STEPS = [
+  ["seller", "Wie lautet der Name des Rechnungsausstellers (Person oder Unternehmen)?"],
+  ["sellerAddress", "Wie lautet die vollständige Adresse des Rechnungsausstellers?"],
+  ["customer", "Wie lautet der Name des Kunden (Person oder Unternehmen)?"],
+  ["customerAddress", "Wie lautet die vollständige Adresse des Kunden?"],
+  ["number", "Welche Rechnungsnummer soll verwendet werden?"],
+  ["date", "Wie lautet das Rechnungsdatum? Bitte im Format TT.MM.JJJJ eingeben."],
+  ["due", "Wann ist die Rechnung fällig? Bitte im Format TT.MM.JJJJ eingeben."],
+  ["description", "Was wird berechnet? Bitte beschreiben Sie die erste Position."]
+];
 
 function germanDate(value) {
   const match = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(value.trim());
@@ -76,114 +73,183 @@ function germanDate(value) {
   return [match[3], match[2].padStart(2, "0"), match[1].padStart(2, "0")].join("-");
 }
 
-function parseInvoiceMessage(text) {
-  const aliases = [
-    ["seller", /^(?:absender|seller)$/i],
-    ["sellerAddress", /^(?:adresse absender|absenderadresse|selleraddress)$/i],
-    ["customer", /^(?:empfänger|empfaenger|kunde|customer)$/i],
-    ["customerAddress", /^(?:adresse empfänger|adresse empfaenger|kundenadresse|customeraddress)$/i],
-    ["number", /^(?:rechnungsnummer|nummer|number)$/i],
-    ["date", /^(?:rechnungsdatum|datum|date)(?:\s*\(.*\))?$/i],
-    ["due", /^(?:fälligkeitsdatum|faelligkeitsdatum|fällig|faellig|due)(?:\s*\(.*\))?$/i],
-    ["description", /^(?:beschreibung|leistung|ware|description)$/i],
-    ["quantity", /^(?:menge|quantity)$/i],
-    ["unitPrice", /^(?:einzelpreis(?:\s*eur)?|preis|unitprice)$/i],
-    ["taxRate", /^(?:umsatzsteuer(?:\s*\(.*\))?|mwst|steuer|taxrate)$/i]
-  ];
-  const values = {};
-  for (const line of text.split(/\r?\n/)) {
-    const match = /^\s*([^:]+):\s*(.*?)\s*$/.exec(line);
-    if (!match) continue;
-    const pair = aliases.find(([, pattern]) => pattern.test(match[1].trim()));
-    if (pair) values[pair[0]] = match[2].trim();
-  }
-  const required = ["seller", "sellerAddress", "customer", "customerAddress", "number", "date", "due", "description", "quantity", "unitPrice", "taxRate"];
-  const missing = required.filter(key => !values[key]);
-  if (missing.length) return { error: "Diese Angaben fehlen noch: " + missing.join(", ") + ". Bitte senden Sie alle 11 Zeilen in einer Nachricht." };
-
-  values.date = germanDate(values.date);
-  values.due = germanDate(values.due);
-  if (!values.date || !values.due) return { error: "Bitte geben Sie beide Datumsangaben im Format TT.MM.JJJJ ein, zum Beispiel 07.11.2026." };
-
-  const quantity = Number(values.quantity.replace(",", "."));
-  const unitPrice = Number(values.unitPrice.replace(",", "."));
-  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 10000) return { error: "Die Menge muss eine positive Zahl sein (maximal 10.000)." };
-  if (!Number.isFinite(unitPrice) || unitPrice <= 0) return { error: "Der Einzelpreis muss eine positive Zahl sein." };
-
-  const taxText = values.taxRate.toLowerCase();
-  const taxRate = taxText === "keine" ? "none" : taxText.replace("%", "").trim();
-  if (!["19", "7", "0", "none"].includes(taxRate)) return { error: "Bei Umsatzsteuer bitte 19, 7, 0 oder keine eintragen." };
-
-  return {
-    data: {
-      seller: values.seller, sellerAddress: values.sellerAddress,
-      customer: values.customer, customerAddress: values.customerAddress,
-      number: values.number, date: values.date, due: values.due,
-      items: [{ description: values.description, quantity, unitPrice }],
-      taxRate, documentType: "invoice"
-    }
-  };
+function formatGermanDate(value) {
+  const [year, month, day] = value.split("-");
+  return [day, month, year].join(".");
 }
 
 function invoiceSummary(data) {
-  const item = data.items[0];
-  const net = item.quantity * item.unitPrice;
+  const net = data.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const rate = data.taxRate === "none" ? 0 : Number(data.taxRate);
   const tax = net * rate / 100;
   const gross = net + tax;
+  const positions = data.items.map((item, index) =>
+    (index + 1) + ". " + item.description + " | " + item.quantity + " × " +
+    item.unitPrice.toFixed(2) + " EUR = " + (item.quantity * item.unitPrice).toFixed(2) + " EUR"
+  ).join("\n");
   return "🧾 Bitte prüfen Sie Ihre Rechnung:\n\n" +
     "Absender: " + data.seller + "\nAdresse: " + data.sellerAddress + "\n" +
     "Empfänger: " + data.customer + "\nAdresse: " + data.customerAddress + "\n" +
-    "Rechnungsnummer: " + data.number + "\nDatum: " + data.date + "\nFällig: " + data.due + "\n" +
-    "Beschreibung: " + item.description + "\nMenge: " + item.quantity + "\nEinzelpreis: " + item.unitPrice.toFixed(2) + " EUR\n" +
-    "Netto: " + net.toFixed(2) + " EUR\nMwSt.: " + tax.toFixed(2) + " EUR (" + (data.taxRate === "none" ? "keine" : data.taxRate + " %") + ")\n" +
-    "Brutto: " + gross.toFixed(2) + " EUR\n\nAntworten Sie mit JA, um die PDF-Rechnung zu erstellen, oder NEIN zum Abbrechen.";
+    "Rechnungsnummer: " + data.number + "\nRechnungsdatum: " + formatGermanDate(data.date) +
+    "\nFälligkeitsdatum: " + formatGermanDate(data.due) + "\n\nPositionen:\n" + positions +
+    "\n\nNetto: " + net.toFixed(2) + " EUR\nMwSt.: " + tax.toFixed(2) + " EUR (" +
+    (data.taxRate === "none" ? "keine" : data.taxRate + " %") + ")\nBrutto: " + gross.toFixed(2) +
+    " EUR\n\nLayout: " + data.template + "\nFarbe: " + data.colorTheme +
+    "\n\nAntworten Sie mit JA, um die PDF-Rechnung zu erstellen, oder NEIN zum Abbrechen.";
+}
+
+function nextWizardPrompt(flow) {
+  if (flow.step === "quantity") return "Wie viele Einheiten?";
+  if (flow.step === "unitPrice") return "Wie hoch ist der Nettopreis pro Einheit in EUR? Beispiel: 49,90";
+  if (flow.step === "moreItems") return "Möchten Sie eine weitere Rechnungsposition hinzufügen? Antworten Sie mit JA oder NEIN.";
+  if (flow.step === "taxRate") return "Welcher Umsatzsteuersatz gilt? Antworten Sie mit 19, 7, 0 oder keine.";
+  if (flow.step === "template") return "Welches PDF-Layout möchten Sie? Antworten Sie mit klassisch, modern oder kompakt.";
+  if (flow.step === "colorTheme") return "Welche Farbe möchten Sie? Antworten Sie mit ozeanblau, waldgrün, violett oder schiefergrau.";
+  const entry = WIZARD_STEPS.find(([key]) => key === flow.step);
+  return entry ? entry[1] : "Bitte beantworten Sie die letzte Frage.";
 }
 
 async function handleInvoiceWizard(chatId, text, deps) {
   const conversations = deps.conversations || (deps.conversations = {});
   const key = String(chatId);
   let flow = conversations[key];
+  const input = text.trim();
 
-  if (text === "/cancel") {
+  if (input === "/cancel") {
     delete conversations[key];
     await deps.reply(chatId, "Die Rechnungserstellung wurde abgebrochen.");
     return { handled: true, action: "invoice-cancelled" };
   }
-  if (/^\/invoice(?:@\w+)?$/i.test(text)) {
-    conversations[key] = { awaitingData: true };
-    await deps.reply(chatId,
-      "🧾 Rechnung erstellen\n\nBitte kopieren Sie diese Vorlage, füllen Sie alle Angaben aus und senden Sie sie komplett in EINER Nachricht. Sie müssen nicht auf einzelne Fragen warten.\n\n" +
-      INVOICE_TEMPLATE + "\n\nBeispiel für Zahlen: Menge 2, Einzelpreis 49,90.\nNetto, MwSt. und Brutto werden automatisch berechnet.\n\nAbbrechen: /cancel");
+  if (/^\/invoice(?:@\w+)?$/i.test(input)) {
+    conversations[key] = { step: "seller", data: { items: [] }, item: {} };
+    await deps.reply(chatId, "🧾 Wir erstellen Ihre Rechnung Schritt für Schritt.\nSie können mehrere Positionen hinzufügen. Netto, MwSt. und Brutto berechne ich automatisch.\n\n" + nextWizardPrompt(conversations[key]) + "\n\nAbbrechen: /cancel");
     return { handled: true, action: "invoice-form-start" };
   }
   if (!flow) return null;
+  if (/^\/(?:start|help)(?:@\w+)?$/i.test(input)) return null;
+  if (input.startsWith("/")) {
+    await deps.reply(chatId, "Bitte beantworten Sie die aktuelle Frage oder senden Sie /cancel zum Abbrechen.\n\n" + nextWizardPrompt(flow));
+    return { handled: true, action: "invoice-wizard-prompt" };
+  }
 
   if (flow.awaitingConfirmation) {
-    if (/^(ja|j|bestätigen|bestaetigen)$/i.test(text)) {
+    if (/^(ja|j|bestätigen|bestaetigen)$/i.test(input)) {
       delete conversations[key];
       await processInvoice(chatId, flow.data, deps);
       return { handled: true, action: "invoice-created" };
     }
-    if (/^(nein|n)$/i.test(text)) {
+    if (/^(nein|n|abbrechen)$/i.test(input)) {
       delete conversations[key];
       await deps.reply(chatId, "Die Rechnung wurde nicht erstellt. Mit /invoice können Sie neu beginnen.");
       return { handled: true, action: "invoice-cancelled" };
     }
-    await deps.reply(chatId, "Bitte antworten Sie mit JA, um die PDF-Rechnung zu erstellen, oder NEIN zum Abbrechen.");
+    await deps.reply(chatId, "Bitte antworten Sie mit JA zum Erstellen oder NEIN zum Abbrechen.");
     return { handled: true, action: "invoice-confirm" };
   }
 
-  if (flow.awaitingData) {
-    const parsed = parseInvoiceMessage(text);
-    if (parsed.error) {
-      await deps.reply(chatId, "Die Angaben konnten noch nicht vollständig gelesen werden.\n" + parsed.error + "\n\nBitte senden Sie die vollständige Vorlage in einer Nachricht.");
-      return { handled: true, action: "invoice-form-invalid" };
+  const value = input.trim();
+  if (!value) {
+    await deps.reply(chatId, "Die Eingabe darf nicht leer sein.\n\n" + nextWizardPrompt(flow));
+    return { handled: true, action: "invoice-wizard-invalid" };
+  }
+
+  const fieldIndex = WIZARD_STEPS.findIndex(([key]) => key === flow.step);
+  if (fieldIndex >= 0) {
+    const [field] = WIZARD_STEPS[fieldIndex];
+    if (field === "date" || field === "due") {
+      const date = germanDate(value);
+      if (!date) {
+        await deps.reply(chatId, "Bitte verwenden Sie das Datumsformat TT.MM.JJJJ, zum Beispiel 07.11.2026.");
+        return { handled: true, action: "invoice-wizard-invalid" };
+      }
+      flow.data[field] = date;
+    } else if (field === "description") {
+      flow.item.description = value;
+      flow.step = "quantity";
+      await deps.reply(chatId, nextWizardPrompt(flow));
+      return { handled: true, action: "invoice-wizard-next" };
+    } else {
+      flow.data[field] = value;
     }
-    conversations[key] = { awaitingConfirmation: true, data: parsed.data };
-    await deps.reply(chatId, invoiceSummary(parsed.data));
+    if (field === "due") flow.step = "description";
+    else flow.step = WIZARD_STEPS[fieldIndex + 1]?.[0] || "description";
+    await deps.reply(chatId, nextWizardPrompt(flow));
+    return { handled: true, action: "invoice-wizard-next" };
+  }
+
+  if (flow.step === "quantity" || flow.step === "unitPrice") {
+    const number = Number(value.replace(",", "."));
+    if (!Number.isFinite(number) || number <= 0 || (flow.step === "quantity" && number > 10000)) {
+      await deps.reply(chatId, flow.step === "quantity" ? "Bitte geben Sie eine positive Menge bis maximal 10.000 ein." : "Bitte geben Sie einen positiven Nettopreis ein, zum Beispiel 49,90.");
+      return { handled: true, action: "invoice-wizard-invalid" };
+    }
+    flow.item[flow.step] = number;
+    if (flow.step === "quantity") flow.step = "unitPrice";
+    else {
+      flow.data.items.push(flow.item);
+      flow.item = {};
+      flow.step = "moreItems";
+    }
+    await deps.reply(chatId, nextWizardPrompt(flow));
+    return { handled: true, action: "invoice-wizard-next" };
+  }
+
+  if (flow.step === "moreItems") {
+    if (/^(ja|j)$/i.test(value)) flow.step = "description";
+    else if (/^(nein|n)$/i.test(value)) flow.step = "taxRate";
+    else {
+      await deps.reply(chatId, "Bitte antworten Sie mit JA oder NEIN.");
+      return { handled: true, action: "invoice-wizard-invalid" };
+    }
+    await deps.reply(chatId, nextWizardPrompt(flow));
+    return { handled: true, action: "invoice-wizard-next" };
+  }
+
+  if (flow.step === "taxRate") {
+    const taxText = value.toLowerCase().replace("%", "").trim();
+    const taxRate = taxText === "keine" ? "none" : taxText;
+    if (!["19", "7", "0", "none"].includes(taxRate)) {
+      await deps.reply(chatId, "Bitte wählen Sie 19, 7, 0 oder keine.");
+      return { handled: true, action: "invoice-wizard-invalid" };
+    }
+    flow.data.taxRate = taxRate;
+    flow.step = "template";
+    await deps.reply(chatId, nextWizardPrompt(flow));
+    return { handled: true, action: "invoice-wizard-next" };
+  }
+
+  if (flow.step === "template") {
+    const templates = { "klassisch": "classic", "classic": "classic", "modern": "modern", "kompakt": "compact", "compact": "compact" };
+    const template = templates[value.toLowerCase()];
+    if (!template) {
+      await deps.reply(chatId, "Bitte wählen Sie klassisch, modern oder kompakt.");
+      return { handled: true, action: "invoice-wizard-invalid" };
+    }
+    flow.data.template = template;
+    flow.step = "colorTheme";
+    await deps.reply(chatId, nextWizardPrompt(flow));
+    return { handled: true, action: "invoice-wizard-next" };
+  }
+
+  if (flow.step === "colorTheme") {
+    const colors = {
+      "ozeanblau": "ocean", "ocean": "ocean",
+      "waldgrün": "forest", "waldgruen": "forest", "forest": "forest",
+      "violett": "violet", "violet": "violet",
+      "schiefergrau": "charcoal", "charcoal": "charcoal"
+    };
+    const colorTheme = colors[value.toLowerCase()];
+    if (!colorTheme) {
+      await deps.reply(chatId, "Bitte wählen Sie ozeanblau, waldgrün, violett oder schiefergrau.");
+      return { handled: true, action: "invoice-wizard-invalid" };
+    }
+    flow.data.colorTheme = colorTheme;
+    flow.awaitingConfirmation = true;
+    delete flow.step;
+    await deps.reply(chatId, invoiceSummary(flow.data));
     return { handled: true, action: "invoice-form-review" };
   }
+
   delete conversations[key];
   return null;
 }
@@ -209,20 +275,9 @@ export async function handleTelegramUpdate(update, deps) {
       await deps.reply(chat.id, updated.skipped ? "Die Notion-Verbindung ist noch nicht eingerichtet." : "Der Rechnungsstatus wurde auf „" + status + "“ gesetzt: " + updated.url);
       return { handled: true, action: "status", status };
     }
-    const invoiceCommand = /^\/invoice(?:@[A-Za-z0-9_]+)?(?:\s+([\s\S]+))?$/i.exec(command);
-    if (invoiceCommand) {
-      const raw = (invoiceCommand[1] || "").trim();
-      if (!raw) {
-        return { handled: true, action: "invoice-help" };
-      }
-      let payload;
-      try { payload = JSON.parse(raw); }
-      catch {
-        await deps.reply(chat.id, "Das JSON-Format ist ungültig. Bitte verwenden Sie die Struktur aus dem README-Beispiel.");
-        return { handled: true, action: "invalid-json" };
-      }
-      await processInvoice(chat.id, payload, deps);
-      return { handled: true, action: "invoice" };
+    if (/^\/invoice(?:@[A-Za-z0-9_]+)?(?:\s|$)/i.test(command)) {
+      await deps.reply(chat.id, "Bitte starten Sie die Rechnungserstellung nur mit /invoice. Danach stelle ich Ihnen alle Fragen einzeln.");
+      return { handled: true, action: "invoice-command-format" };
     }
     await deps.reply(chat.id, "Für Hilfe senden Sie /help.");
     return { handled: true, action: "unknown-command" };
