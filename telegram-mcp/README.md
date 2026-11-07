@@ -1,6 +1,6 @@
 # Rechnio: Telegram- und Notion-Integration
 
-**Sprache der Bot-Nachrichten und Dokumentation: Deutsch.** Der Dienst verwendet die vorhandene Rechnio-Webseite `index.html` in Chromium zur PDF-Erstellung. Bestehende Berechnungen und Vorlagen (Classic, Modern und Compact) bleiben erhalten. Vier Farbwelten stehen zur Auswahl: Ozeanblau, Waldgrün, Violett und Schiefergrau. Ein hochgeladenes Firmenlogo ersetzt die Rechnio-Wortmarke im Rechnungsbriefkopf und wird vor dem PDF-Export vollständig geladen.
+**Sprache der Bot-Nachrichten und Dokumentation: Deutsch.** Der Dienst verwendet die vorhandene Rechnio-Webseite `index.html` in Chromium zur PDF-Erstellung. Bestehende Berechnungen und Vorlagen (Classic, Modern und Compact) bleiben erhalten. Vier Farbwelten stehen zur Auswahl: Ozeanblau, Waldgrün, Violett und Schiefergrau. Das Firmenlogo kann derzeit in der Weboberfläche hochgeladen werden; der Telegram-Dialog bietet noch keine Logo-Übermittlung.
 
 ## Telegram-Befehle
 
@@ -26,7 +26,7 @@ Der Bot berechnet Netto, Umsatzsteuer und Brutto automatisch. Die Eingaben werde
 
 ## Mahnungen
 
-Für eine Mahnung `"documentType":"mahnung"` verwenden, eine eigene Dokumentnummer vergeben und die Nummer der Originalrechnung in `"originalInvoice"` eintragen. Die ursprünglichen Rechnungspositionen angeben. Existiert die Originalrechnung in Notion, übernimmt der Dienst den gespeicherten Steuersatz und aktualisiert Status sowie Mahnstufe der Originalrechnung. Die Mahnung wird als eigener Datensatz gespeichert.
+Die Notion-Integration unterstützt Mahnungsdatensätze und Mahnstufen technisch. Der aktuelle Telegram-Dialog enthält jedoch noch keinen Ablauf zum Erstellen einer Mahnung. Über Telegram können vorhandene Rechnungen mit `/overdue`, `/paid`, `/sent` und `/cancelled` verwaltet werden.
 
 ## Notion-Datenbank
 
