@@ -25,8 +25,8 @@ const message = (text, { userId = 123456, chatType = "private" } = {}) => ({
 
 test("ignores group chats and users outside the allowlist", async () => {
   const deps = makeDeps();
-  assert.deepEqual(await handleTelegramUpdate(message("/help", { chatType: "group" }), deps), { ignored: true });
-  assert.deepEqual(await handleTelegramUpdate(message("/help", { userId: 555 }), deps), { ignored: true });
+  assert.deepEqual(await handleTelegramUpdate(message("/help", { chatType: "group" }), deps), { ignored: true, reason: "non-private" });
+  assert.deepEqual(await handleTelegramUpdate(message("/help", { userId: 555 }), deps), { ignored: true, reason: "not-allowed" });
   assert.equal(deps.replies.length, 0);
 });
 
