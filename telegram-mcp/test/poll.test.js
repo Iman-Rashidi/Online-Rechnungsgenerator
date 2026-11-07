@@ -112,3 +112,32 @@ test("polling checks the webhook, processes updates, and persists the next offse
   assert.equal(saved.nextOffset, 51);
   await unlink(tmp);
 });
+
+
+test("creates an invoice through the German step-by-step wizard without JSON", async () => {
+  let rendered;
+  const deps = makeDeps({
+    conversations: {},
+    renderInvoicePdf: async payload => {
+      rendered = payload;
+      return { pdf: Buffer.from("%PDF-demo"), totals: { net: 49.9, tax: 9.48, gross: 59.38 } };
+    }
+  });
+  const send = text => handleTelegramUpdate(message(text), deps);
+  assert.equal((await send("/invoice")).action, "invoice-wizard-start");
+  for (const answer of [
+    "Musterfirma GmbH", "Musterstraße 1, 50667 Köln",
+    "Beispielkunde GmbH", "Kundenweg 2, 50668 Köln",
+    "RE-2026-TEST-001", "07.11.2026", "21.11.2026",
+    "Beratung", "1", "49,90", "19"
+  ]) {
+    await send(answer);
+  }
+  assert.match(deps.replies.at(-1).text, /JA.*NEIN/s);
+  assert.equal((await send("JA")).action, "invoice-wizard-created");
+  assert.equal(rendered.seller, "Musterfirma GmbH");
+  assert.equal(rendered.date, "2026-11-07");
+  assert.equal(rendered.items[0].unitPrice, 49.9);
+  assert.equal(deps.documents.length, 1);
+  assert.equal(Object.keys(deps.conversations).length, 0);
+});
