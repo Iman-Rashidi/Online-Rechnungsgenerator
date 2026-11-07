@@ -58,11 +58,11 @@ Das PDF wird direkt über Telegram zugestellt und nicht öffentlich gehostet. De
 
 ### Empfohlener Betrieb: GitHub-Actions-Polling
 
-Für den hostfreien Polling-Modus werden ausschließlich diese Repository-Secrets und Repository-Variablen verwendet:
+Für den hostfreien Polling-Modus werden ausschließlich diese drei Repository-Secrets benötigt:
 
 **Secrets:** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS`, `NOTION_API_KEY`.
 
-**Variablen:** `NOTION_DATA_SOURCE_ID` und `RECHNIO_TELEGRAM_POLLING_ENABLED`.
+Weitere Repository-Variablen sind nicht erforderlich. Die Notion Data-Source-ID ist bereits im GitHub-Actions-Workflow hinterlegt.
 
 Die genauen Einrichtungsschritte stehen im Abschnitt „Telegram-Bot ohne eigenen Server (GitHub Actions)“. Die Notion-Integration muss ausdrücklich Zugriff auf die Rechnio-Datenquelle erhalten.
 
