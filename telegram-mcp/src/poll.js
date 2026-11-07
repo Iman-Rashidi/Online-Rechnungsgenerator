@@ -206,7 +206,7 @@ async function handleInvoiceWizard(chatId, text, deps) {
 
   // Accept a complete invoice form even if /invoice was not sent first or
   // the short-lived wizard state was lost between scheduled polling runs.
-  if (!flow && /(?:^|\\n)\\s*Absender\\s*:/i.test(input)) {
+  if (!flow && /(?:^|\n)\s*Absender\s*:/i.test(input)) {
     flow = conversations[key] = { step: "all-fields" };
   }
 
