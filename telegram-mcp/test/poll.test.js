@@ -187,22 +187,27 @@ test("persists the one-message invoice form across polling runs", async () => {
   await unlink(stateFile);
 });
 
-test("rejects invalid dates, quantities and tax rates without creating a PDF", async () => {
+test("rejects invalid dates and invalid quantities in the one-message form", async () => {
   const deps = makeDeps({ conversations: {} });
   const send = text => handleTelegramUpdate(message(text), deps);
   await send("/invoice");
-  await send("Test GmbH");
-  await send("Teststraße 1");
-  await send("Kunde");
-  await send("Kundenstraße 2");
-  await send("RE-1");
-  const invalidDate = await send("31.02.2026");
+  const invalidDate = await send([
+    "Absender: Test GmbH", "Absenderadresse: Teststraße 1", "Kunde: Kunde",
+    "Kundenadresse: Kundenstraße 2", "Rechnungsnummer: RE-1",
+    "Rechnungsdatum: 31.02.2026", "Fällig am: 21.11.2026",
+    "Positionen:", "Dienstleistung | 1 | 20,00",
+    "MwSt: 19", "Layout: modern", "Farbe: ozeanblau"
+  ].join("\n"));
   assert.equal(invalidDate.action, "invoice-wizard-invalid");
   assert.match(deps.replies.at(-1).text, /Datumsformat/);
-  await send("07.11.2026");
-  await send("21.11.2026");
-  await send("Dienstleistung");
-  const invalidQuantity = await send("0");
+  const invalidQuantity = await send([
+    "Absender: Test GmbH", "Absenderadresse: Teststraße 1", "Kunde: Kunde",
+    "Kundenadresse: Kundenstraße 2", "Rechnungsnummer: RE-1",
+    "Rechnungsdatum: 07.11.2026", "Fällig am: 21.11.2026",
+    "Positionen:", "Dienstleistung | 0 | 20,00",
+    "MwSt: 19", "Layout: modern", "Farbe: ozeanblau"
+  ].join("\n"));
   assert.equal(invalidQuantity.action, "invoice-wizard-invalid");
+  assert.match(deps.replies.at(-1).text, /Position/);
   assert.equal(deps.documents.length, 0);
 });
