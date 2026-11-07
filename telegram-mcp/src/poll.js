@@ -54,19 +54,19 @@ async function processInvoice(chatId, payload, deps) {
   }
 }
 
-const WIZARD_FIELDS = [
-  ["seller", "Name/Firma des Absenders:"],
-  ["sellerAddress", "Adresse des Absenders:"],
-  ["customer", "Name/Firma des Kunden:"],
-  ["customerAddress", "Adresse des Kunden:"],
-  ["number", "Rechnungsnummer (z. B. RE-2026-001):"],
-  ["date", "Rechnungsdatum (TT.MM.JJJJ):"],
-  ["due", "Fälligkeitsdatum (TT.MM.JJJJ):"],
-  ["description", "Beschreibung der Leistung oder Ware:"],
-  ["quantity", "Menge:"],
-  ["unitPrice", "Einzelpreis in EUR (z. B. 49,90):"],
-  ["taxRate", "Umsatzsteuer? Bitte 19, 7, 0 oder keine eingeben:"]
-];
+const INVOICE_TEMPLATE = [
+  "Absender:",
+  "Adresse Absender:",
+  "Empfänger:",
+  "Adresse Empfänger:",
+  "Rechnungsnummer:",
+  "Rechnungsdatum (TT.MM.JJJJ):",
+  "Fälligkeitsdatum (TT.MM.JJJJ):",
+  "Beschreibung:",
+  "Menge:",
+  "Einzelpreis EUR:",
+  "Umsatzsteuer (19, 7, 0 oder keine):"
+].join("\n");
 
 function germanDate(value) {
   const match = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(value.trim());
@@ -76,85 +76,116 @@ function germanDate(value) {
   return [match[3], match[2].padStart(2, "0"), match[1].padStart(2, "0")].join("-");
 }
 
+function parseInvoiceMessage(text) {
+  const aliases = [
+    ["seller", /^(?:absender|seller)$/i],
+    ["sellerAddress", /^(?:adresse absender|absenderadresse|selleraddress)$/i],
+    ["customer", /^(?:empfänger|empfaenger|kunde|customer)$/i],
+    ["customerAddress", /^(?:adresse empfänger|adresse empfaenger|kundenadresse|customeraddress)$/i],
+    ["number", /^(?:rechnungsnummer|nummer|number)$/i],
+    ["date", /^(?:rechnungsdatum|datum|date)(?:\s*\(.*\))?$/i],
+    ["due", /^(?:fälligkeitsdatum|faelligkeitsdatum|fällig|faellig|due)(?:\s*\(.*\))?$/i],
+    ["description", /^(?:beschreibung|leistung|ware|description)$/i],
+    ["quantity", /^(?:menge|quantity)$/i],
+    ["unitPrice", /^(?:einzelpreis(?:\s*eur)?|preis|unitprice)$/i],
+    ["taxRate", /^(?:umsatzsteuer(?:\s*\(.*\))?|mwst|steuer|taxrate)$/i]
+  ];
+  const values = {};
+  for (const line of text.split(/\r?\n/)) {
+    const match = /^\s*([^:]+):\s*(.*?)\s*$/.exec(line);
+    if (!match) continue;
+    const pair = aliases.find(([, pattern]) => pattern.test(match[1].trim()));
+    if (pair) values[pair[0]] = match[2].trim();
+  }
+  const required = ["seller", "sellerAddress", "customer", "customerAddress", "number", "date", "due", "description", "quantity", "unitPrice", "taxRate"];
+  const missing = required.filter(key => !values[key]);
+  if (missing.length) return { error: "Diese Angaben fehlen noch: " + missing.join(", ") + ". Bitte senden Sie alle 11 Zeilen in einer Nachricht." };
+
+  values.date = germanDate(values.date);
+  values.due = germanDate(values.due);
+  if (!values.date || !values.due) return { error: "Bitte geben Sie beide Datumsangaben im Format TT.MM.JJJJ ein, zum Beispiel 07.11.2026." };
+
+  const quantity = Number(values.quantity.replace(",", "."));
+  const unitPrice = Number(values.unitPrice.replace(",", "."));
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 10000) return { error: "Die Menge muss eine positive Zahl sein (maximal 10.000)." };
+  if (!Number.isFinite(unitPrice) || unitPrice <= 0) return { error: "Der Einzelpreis muss eine positive Zahl sein." };
+
+  const taxText = values.taxRate.toLowerCase();
+  const taxRate = taxText === "keine" ? "none" : taxText.replace("%", "").trim();
+  if (!["19", "7", "0", "none"].includes(taxRate)) return { error: "Bei Umsatzsteuer bitte 19, 7, 0 oder keine eintragen." };
+
+  return {
+    data: {
+      seller: values.seller, sellerAddress: values.sellerAddress,
+      customer: values.customer, customerAddress: values.customerAddress,
+      number: values.number, date: values.date, due: values.due,
+      items: [{ description: values.description, quantity, unitPrice }],
+      taxRate, documentType: "invoice"
+    }
+  };
+}
+
+function invoiceSummary(data) {
+  const item = data.items[0];
+  const net = item.quantity * item.unitPrice;
+  const rate = data.taxRate === "none" ? 0 : Number(data.taxRate);
+  const tax = net * rate / 100;
+  const gross = net + tax;
+  return "🧾 Bitte prüfen Sie Ihre Rechnung:\\n\\n" +
+    "Absender: " + data.seller + "\\nAdresse: " + data.sellerAddress + "\\n" +
+    "Empfänger: " + data.customer + "\\nAdresse: " + data.customerAddress + "\\n" +
+    "Rechnungsnummer: " + data.number + "\\nDatum: " + data.date + "\\nFällig: " + data.due + "\\n" +
+    "Beschreibung: " + item.description + "\\nMenge: " + item.quantity + "\\nEinzelpreis: " + item.unitPrice.toFixed(2) + " EUR\\n" +
+    "Netto: " + net.toFixed(2) + " EUR\\nMwSt.: " + tax.toFixed(2) + " EUR (" + (data.taxRate === "none" ? "keine" : data.taxRate + " %") + ")\\n" +
+    "Brutto: " + gross.toFixed(2) + " EUR\\n\\nAntworten Sie mit JA, um die PDF-Rechnung zu erstellen, oder NEIN zum Abbrechen.";
+}
+
 async function handleInvoiceWizard(chatId, text, deps) {
   const conversations = deps.conversations || (deps.conversations = {});
-  let flow = conversations[String(chatId)];
+  const key = String(chatId);
+  let flow = conversations[key];
+
   if (text === "/cancel") {
-    delete conversations[String(chatId)];
+    delete conversations[key];
     await deps.reply(chatId, "Die Rechnungserstellung wurde abgebrochen.");
     return { handled: true, action: "invoice-cancelled" };
   }
   if (/^\/invoice(?:@\w+)?$/i.test(text)) {
-    flow = { step: 0, data: {} };
-    conversations[String(chatId)] = flow;
-    await deps.reply(chatId, "🧾 Rechnung erstellen\n\nWir gehen die Angaben Schritt für Schritt durch. Sie brauchen kein JSON.\n\n" + WIZARD_FIELDS[0][1] + "\n\nZum Abbrechen: /cancel");
-    return { handled: true, action: "invoice-wizard-start" };
+    conversations[key] = { awaitingData: true };
+    await deps.reply(chatId,
+      "🧾 Rechnung erstellen\\n\\nBitte kopieren Sie diese Vorlage, füllen Sie alle Angaben aus und senden Sie sie komplett in EINER Nachricht. Sie müssen nicht auf einzelne Fragen warten.\\n\\n" +
+      INVOICE_TEMPLATE + "\\n\\nBeispiel für Zahlen: Menge 2, Einzelpreis 49,90.\\nNetto, MwSt. und Brutto werden automatisch berechnet.\\n\\nAbbrechen: /cancel");
+    return { handled: true, action: "invoice-form-start" };
   }
   if (!flow) return null;
-  if (flow.step === WIZARD_FIELDS.length) {
+
+  if (flow.awaitingConfirmation) {
     if (/^(ja|j|bestätigen|bestaetigen)$/i.test(text)) {
-      delete conversations[String(chatId)];
+      delete conversations[key];
       await processInvoice(chatId, flow.data, deps);
-      return { handled: true, action: "invoice-wizard-created" };
+      return { handled: true, action: "invoice-created" };
     }
     if (/^(nein|n)$/i.test(text)) {
-      delete conversations[String(chatId)];
+      delete conversations[key];
       await deps.reply(chatId, "Die Rechnung wurde nicht erstellt. Mit /invoice können Sie neu beginnen.");
-      return { handled: true, action: "invoice-wizard-cancelled" };
+      return { handled: true, action: "invoice-cancelled" };
     }
     await deps.reply(chatId, "Bitte antworten Sie mit JA, um die PDF-Rechnung zu erstellen, oder NEIN zum Abbrechen.");
-    return { handled: true, action: "invoice-wizard-confirm" };
+    return { handled: true, action: "invoice-confirm" };
   }
-  const [field] = WIZARD_FIELDS[flow.step];
-  let value = text.trim();
-  if (!value) {
-    await deps.reply(chatId, "Bitte geben Sie einen Wert ein. " + WIZARD_FIELDS[flow.step][1]);
-    return { handled: true, action: "invoice-wizard-invalid" };
-  }
-  if (field === "date" || field === "due") {
-    value = germanDate(value);
-    if (!value) {
-      await deps.reply(chatId, "Bitte verwenden Sie das Format TT.MM.JJJJ, zum Beispiel 07.11.2026.");
-      return { handled: true, action: "invoice-wizard-invalid" };
+
+  if (flow.awaitingData) {
+    const parsed = parseInvoiceMessage(text);
+    if (parsed.error) {
+      await deps.reply(chatId, "Die Angaben konnten noch nicht vollständig gelesen werden.\\n" + parsed.error + "\\n\\nBitte senden Sie die vollständige Vorlage in einer Nachricht.");
+      return { handled: true, action: "invoice-form-invalid" };
     }
+    conversations[key] = { awaitingConfirmation: true, data: parsed.data };
+    await deps.reply(chatId, invoiceSummary(parsed.data));
+    return { handled: true, action: "invoice-form-review" };
   }
-  if (field === "quantity" || field === "unitPrice") {
-    value = Number(value.replace(",", "."));
-    if (!Number.isFinite(value) || value <= 0 || (field === "quantity" && value > 10000)) {
-      await deps.reply(chatId, "Bitte geben Sie eine gültige positive Zahl ein.");
-      return { handled: true, action: "invoice-wizard-invalid" };
-    }
-  }
-  if (field === "taxRate") {
-    const normalized = value.toLowerCase();
-    value = normalized === "keine" ? "none" : normalized;
-    if (!["19", "7", "0", "none"].includes(value)) {
-      await deps.reply(chatId, "Bitte wählen Sie 19, 7, 0 oder keine.");
-      return { handled: true, action: "invoice-wizard-invalid" };
-    }
-  }
-  flow.data[field] = value;
-  flow.step += 1;
-  if (flow.step < WIZARD_FIELDS.length) {
-    await deps.reply(chatId, "Danke!\n\n" + WIZARD_FIELDS[flow.step][1]);
-  } else {
-    flow.data.items = [{ description: flow.data.description, quantity: flow.data.quantity, unitPrice: flow.data.unitPrice }];
-    delete flow.data.description;
-    delete flow.data.quantity;
-    delete flow.data.unitPrice;
-    flow.data.documentType = "invoice";
-    const d = flow.data;
-    await deps.reply(chatId,
-      "🧾 Bitte prüfen Sie Ihre Angaben:\n\n" +
-      "Absender: " + d.seller + "\nAdresse: " + d.sellerAddress + "\n" +
-      "Kunde: " + d.customer + "\nKundenadresse: " + d.customerAddress + "\n" +
-      "Rechnungsnummer: " + d.number + "\nDatum: " + d.date + "\nFällig: " + d.due + "\n" +
-      "Position: " + d.items[0].description + "\nMenge: " + d.items[0].quantity + "\nEinzelpreis: " + d.items[0].unitPrice + " EUR\n" +
-      "Umsatzsteuer: " + (d.taxRate === "none" ? "Keine" : d.taxRate + " %") +
-      "\n\nAntworten Sie mit JA, um die PDF zu erstellen, oder NEIN zum Abbrechen."
-    );
-  }
-  return { handled: true, action: "invoice-wizard-step", step: flow.step };
+  delete conversations[key];
+  return null;
 }
 
 export async function handleTelegramUpdate(update, deps) {
