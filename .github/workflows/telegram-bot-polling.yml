@@ -24,7 +24,7 @@ jobs:
       data_source_id: ${{ steps.verify-notion.outputs.data_source_id }}
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_BOT_TOKEN_2: ${{ secrets.TELEGRAM_BOT_TOKEN_2 }}
+      TELEGRAM_BOT_TOKEN1: ${{ secrets.TELEGRAM_BOT_TOKEN1 }}
       TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
       NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
       NOTION_DATABASE_ID: 5d59ff8e-5fc2-4445-ab81-6bfbf2f74640
@@ -43,11 +43,11 @@ jobs:
             echo "Production polling is paused. Missing repository secrets: ${missing[*]}"
             echo "ready=false" >> "$GITHUB_OUTPUT"
           else
-            if [[ -n "$TELEGRAM_BOT_TOKEN_2" && "$TELEGRAM_BOT_TOKEN_2" == "$TELEGRAM_BOT_TOKEN" ]]; then
-              echo "TELEGRAM_BOT_TOKEN_2 must contain a different bot token."
+            if [[ -n "$TELEGRAM_BOT_TOKEN1" && "$TELEGRAM_BOT_TOKEN1" == "$TELEGRAM_BOT_TOKEN" ]]; then
+              echo "TELEGRAM_BOT_TOKEN1 must contain a different bot token."
               exit 1
             fi
-            if [[ -n "$TELEGRAM_BOT_TOKEN_2" ]]; then
+            if [[ -n "$TELEGRAM_BOT_TOKEN1" ]]; then
               echo "A second Telegram bot is configured. Token value is not printed."
             fi
             echo "Production secrets are present. Values are not printed."
@@ -131,7 +131,7 @@ jobs:
         working-directory: telegram-mcp
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_BOT_TOKEN_2: ${{ secrets.TELEGRAM_BOT_TOKEN_2 }}
+      TELEGRAM_BOT_TOKEN1: ${{ secrets.TELEGRAM_BOT_TOKEN1 }}
       TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
       NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
       NOTION_DATA_SOURCE_ID: ${{ needs.check-config.outputs.data_source_id }}
@@ -176,9 +176,9 @@ jobs:
         run: node src/poll.js
 
       - name: Run second Telegram bot polling cycle
-        if: ${{ env.TELEGRAM_BOT_TOKEN_2 != '' }}
+        if: ${{ env.TELEGRAM_BOT_TOKEN1 != '' }}
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN_2 }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN1 }}
           STATE_FILE: data/telegram-updates-bot-2.json
         run: node src/poll.js
 
