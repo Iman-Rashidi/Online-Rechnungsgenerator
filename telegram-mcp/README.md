@@ -5,7 +5,10 @@
 ## Telegram-Befehle
 
 - `/start` oder `/help`: Deutsche Hilfe anzeigen.
-- `/invoice {JSON}`: PDF erstellen, an Telegram senden und den Datensatz in Notion anlegen oder aktualisieren.
+- `/invoice`: Eine Rechnung Schritt für Schritt erstellen. Der Bot fragt Absender, Kunde, Rechnungsdaten, Position und Umsatzsteuer einzeln ab. JSON-Kenntnisse sind nicht erforderlich.
+- `/cancel`: Eine laufende Rechnungserstellung abbrechen.
+- Nach der Zusammenfassung mit `JA` bestätigen oder mit `NEIN` abbrechen. Danach erstellt der Bot das PDF und speichert den Datensatz in Notion.
+- Fortgeschrittene Nutzer können weiterhin `/invoice {JSON}` verwenden.
 - `/paid RE-2026-001`: Rechnung als bezahlt markieren.
 - `/sent RE-2026-001`: Rechnung als versendet markieren.
 - `/overdue RE-2026-001`: Rechnung als überfällig markieren.
