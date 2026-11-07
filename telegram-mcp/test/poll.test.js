@@ -105,7 +105,7 @@ test("collects invoice details one question at a time, supports multiple items a
     ["Beispielkunde GmbH", /vollständige Adresse des Kunden/],
     ["Kundenweg 2, 50668 Köln", /Rechnungsnummer/],
     ["RE-2026-TEST-001", /Rechnungsdatum/],
-    ["07.11.2026", /Fälligkeitsdatum/],
+    ["07.11.2026", /Rechnung fällig/],
     ["21.11.2026", /erste Position/],
     ["Beratung", /Wie viele Einheiten/],
     ["2", /Nettopreis pro Einheit/],
