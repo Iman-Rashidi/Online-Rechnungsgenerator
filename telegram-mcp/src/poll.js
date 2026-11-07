@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { renderInvoicePdf } from "./invoice.js";
 import { getInvoiceFromNotion, saveInvoiceToNotion, updateInvoiceStatus } from "./notion.js";
 
-const HELP_TEXT = ["Rechnio ist bereit.", "", "PDF-Rechnung erstellen:", "/invoice gefolgt von den vollständigen Rechnungsdaten als JSON", "", "Rechnung als bezahlt markieren:", "/paid RE-2026-001", "", "Als an den Kunden versendet markieren:", "/sent RE-2026-001", "", "Als überfällig markieren:", "/overdue RE-2026-001", "", "Rechnung stornieren:", "/cancelled RE-2026-001", "", "Ein vollständiges JSON-Beispiel finden Sie in der README des GitHub-Projekts."].join("\n");
+const HELP_TEXT = ["Rechnio ist bereit.", "", "Neue Rechnung Schritt für Schritt erstellen: /invoice", "Sie brauchen kein JSON. Antworten Sie einfach auf die Fragen des Bots.", "Abbrechen: /cancel", "", "Rechnung als bezahlt markieren: /paid RE-2026-001", "Als versendet markieren: /sent RE-2026-001", "Als überfällig markieren: /overdue RE-2026-001", "Rechnung stornieren: /cancelled RE-2026-001"].join("\n");
 
 function safeError(error) {
   return String(error instanceof Error ? error.message : "Unbekannter Fehler.").slice(0, 300);
