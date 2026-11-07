@@ -44,9 +44,9 @@ Das PDF wird direkt über Telegram zugestellt und nicht öffentlich gehostet. De
 
 ### Empfohlener Betrieb: GitHub-Actions-Polling
 
-Für den hostfreien Polling-Modus werden ausschließlich diese drei Repository-Secrets benötigt:
+Für den hostfreien Polling-Modus werden nur die beiden Pflicht-Secrets benötigt:
 
-**Pflicht-Secrets:** `TELEGRAM_BOT_TOKEN` und `TELEGRAM_ALLOWED_USER_IDS`. `NOTION_API_KEY` ist optional und aktiviert die Notion-Synchronisierung. Ohne Notion bleiben Hilfe, Statusinformationen zur Verbindung und die Telegram-Grundfunktionen erreichbar; Rechnungen können als PDF erstellt und gesendet werden, werden dann aber nicht in Notion gespeichert. Für einen zweiten Bot kommt optional `TELEGRAM_BOT_TOKEN1` hinzu.
+**Pflicht-Secrets:** `TELEGRAM_BOT_TOKEN` und `TELEGRAM_ALLOWED_USER_IDS`. `NOTION_API_KEY` ist optional und aktiviert die Notion-Synchronisierung. Ohne Notion bleiben Hilfe und die Telegram-Grundfunktionen erreichbar; Rechnungen können als PDF erstellt und gesendet werden, werden dann aber nicht in Notion gespeichert. Der Workflow aktiviert ausschließlich den primären Bot.
 
 Weitere Repository-Variablen sind nicht erforderlich. Die Notion Data-Source-ID ist bereits im GitHub-Actions-Workflow hinterlegt.
 
@@ -66,16 +66,15 @@ Der Bot kann ohne dauerhaft laufenden Node.js-Host betrieben werden. GitHub Acti
 
 In den Repository-Einstellungen unter **Settings → Secrets and variables → Actions** müssen nur diese drei **Repository secrets** hinterlegt werden:
 
-- `TELEGRAM_BOT_TOKEN`: Token des ersten Telegram-Bots.
-- `TELEGRAM_BOT_TOKEN1`: optionaler Token des zweiten Telegram-Bots. Der Workflow fragt beide Bots nacheinander ab und speichert ihre Telegram-Update-IDs getrennt.
-- `TELEGRAM_ALLOWED_USER_IDS`: numerische Telegram-Benutzer-ID(s), bei mehreren kommasepariert. Diese Freigabeliste gilt für beide Bots.
+- `TELEGRAM_BOT_TOKEN`: Token des einzigen aktiven Telegram-Bots.
+- `TELEGRAM_ALLOWED_USER_IDS`: numerische Telegram-Benutzer-ID(s), bei mehreren kommasepariert. Diese Freigabeliste gilt für den primären Bot.
 - `NOTION_API_KEY`: optionaler Notion-Integrationsschlüssel für das Speichern und Aktualisieren von Rechnungen.
 
 Die Notion-Integration muss ausdrücklich Zugriff auf die Rechnio-Datenquelle erhalten. Die Datenquellen-ID ist bereits im Workflow eingetragen. Zugangsdaten ausschließlich als GitHub Secrets speichern, niemals in Chat, Quellcode oder Screenshots veröffentlichen.
 
-Sobald die beiden Pflicht-Secrets vorhanden sind, startet der Workflow beim nächsten Zeitplan. Die Notion-Prüfung läuft unabhängig und darf den Telegram-Polling-Lauf nicht blockieren; bei einem Notion-Ausfall bleiben Befehle wie `/start` und `/help` weiterhin erreichbar. Es ist keine zusätzliche Repository-Variable oder manuelle Aktivierung nötig. Ein manueller Test ist über **Actions → Rechnio Telegram bot polling → Run workflow** möglich. Solange Pflicht-Secrets fehlen, zeigt GitHub ausschließlich deren Namen an und überspringt den Bot-Lauf. Secret-Werte werden niemals ausgegeben.
+Sobald beide Pflicht-Secrets vorhanden sind, startet der Workflow beim nächsten Zeitplan. Die Notion-Prüfung läuft unabhängig und darf den Telegram-Polling-Lauf nicht blockieren; bei einem Notion-Ausfall bleiben Befehle wie `/start` und `/help` weiterhin erreichbar. Es ist keine zusätzliche Repository-Variable oder manuelle Aktivierung nötig. Ein manueller Test ist über **Actions → Rechnio Telegram bot polling → Run workflow** möglich. Solange Pflicht-Secrets fehlen, zeigt GitHub ausschließlich deren Namen an und überspringt den Bot-Lauf. Secret-Werte werden niemals ausgegeben.
 
-Der Workflow speichert die numerische Telegram-Update-ID jedes Bots in einer eigenen Datei im GitHub-Actions-Cache; keine Zugangsdaten oder PDF-Rechnungen werden dort abgelegt. Beide Bots reagieren ausschließlich auf private Chats von explizit freigegebenen Benutzer-IDs. Ohne `TELEGRAM_BOT_TOKEN1` läuft nur der erste Bot.
+Der Workflow speichert die numerische Telegram-Update-ID des primären Bots im GitHub-Actions-Cache; keine Zugangsdaten oder PDF-Rechnungen werden dort abgelegt. Der Bot reagiert ausschließlich auf private Chats von explizit freigegebenen Benutzer-IDs.
 
 
 ## Bereitstellung des alternativen Webhook-/MCP-Servers
