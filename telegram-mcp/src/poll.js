@@ -235,7 +235,7 @@ export async function runPolling(options = {}) {
 
   const updates = await api("getUpdates", {
     ...(state.nextOffset !== undefined ? { offset: state.nextOffset } : {}),
-    limit: 100, timeout: 0, allowed_updates: ["message"]
+    limit: 100, timeout: Number.isInteger(options.pollTimeoutSeconds) ? Math.min(50, Math.max(0, options.pollTimeoutSeconds)) : 0, allowed_updates: ["message"]
   });
   const deps = {
     allowedUserIds,
