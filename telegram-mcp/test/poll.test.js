@@ -30,10 +30,13 @@ test("ignores group chats and users outside the allowlist", async () => {
   assert.equal(deps.replies.length, 0);
 });
 
-test("sends German help for /start and /help", async () => {
+test("sends German help for /start, /help and addressed bot commands", async () => {
   const deps = makeDeps();
-  const result = await handleTelegramUpdate(message("/help"), deps);
-  assert.equal(result.action, "help");
+  const start = await handleTelegramUpdate(message("/start@RechnioBot"), deps);
+  const help = await handleTelegramUpdate(message("/help"), deps);
+  assert.equal(start.action, "help");
+  assert.equal(help.action, "help");
+  assert.equal(deps.replies.length, 2);
   assert.match(deps.replies[0].text, /Rechnio ist bereit/);
   assert.match(deps.replies[0].text, /Rechnung als bezahlt markieren/);
 });
@@ -59,7 +62,10 @@ test("polling checks the webhook, processes updates, and persists the next offse
   const telegramRequest = async (_token, method, payload) => {
     calls.push({ method, payload });
     if (method === "getWebhookInfo") return { url: "" };
-    if (method === "getUpdates") return [{ update_id: 50, message: message("/help").message }];
+    if (method === "getUpdates") return [
+      { update_id: 50, message: message("/help").message },
+      { update_id: 51, message: message("/help", { userId: 555 }).message }
+    ];
     if (method === "sendMessage") return { message_id: 1 };
     throw new Error("Unexpected Telegram method: " + method);
   };
@@ -77,16 +83,48 @@ test("polling checks the webhook, processes updates, and persists the next offse
     saveInvoiceToNotion: async () => ({ skipped: true }),
     updateInvoiceStatus: async () => ({ skipped: true })
   });
-  assert.deepEqual(result, { received: 1, handled: 1, nextOffset: 51 });
+  assert.deepEqual(result, {
+    received: 2,
+    handled: 1,
+    ignored: 1,
+    ignoredNonMessage: 0,
+    ignoredNonPrivate: 0,
+    ignoredMissingSender: 0,
+    ignoredNotAllowed: 1,
+    repliesSent: 1,
+    replyFailures: 0,
+    nextOffset: 52
+  });
   assert.equal(calls[0].method, "getWebhookInfo");
   assert.equal(calls[1].method, "getUpdates");
   assert.equal(calls[1].payload.offset, undefined);
   const { readFile, unlink } = await import("node:fs/promises");
   const saved = JSON.parse(await readFile(tmp, "utf8"));
-  assert.equal(saved.nextOffset, 51);
+  assert.equal(saved.nextOffset, 52);
   await unlink(tmp);
 });
 
+
+
+test("answers basic Telegram commands when the optional Notion connection is unavailable", async () => {
+  const stateFile = "./data/poll-no-notion-state.json";
+  const sent = [];
+  const result = await runPolling({
+    env: { TELEGRAM_BOT_TOKEN: "fake-token", TELEGRAM_ALLOWED_USER_IDS: "123456" },
+    stateFile,
+    telegramRequest: async (_token, method) => {
+      if (method === "getWebhookInfo") return { url: "" };
+      if (method === "getUpdates") return [{ update_id: 80, message: message("/start").message }];
+      if (method === "sendMessage") { sent.push(true); return { message_id: 1 }; }
+      throw new Error("Unexpected Telegram method: " + method);
+    }
+  });
+  assert.equal(result.handled, 1);
+  assert.equal(result.repliesSent, 1);
+  assert.equal(sent.length, 1);
+  const { unlink } = await import("node:fs/promises");
+  await unlink(stateFile);
+});
 
 test("collects all invoice details in one message, supports multiple items and confirms before PDF creation", async () => {
   let rendered;
