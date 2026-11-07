@@ -31,11 +31,9 @@ Clone the repository and install dependencies:
 ```bash
 git clone https://github.com/Iman-Rashidi/Online-Rechnungsgenerator.git
 cd Online-Rechnungsgenerator/telegram-mcp
-npm ci
+npm install
 npx playwright install --with-deps chromium
 ```
-
-If `npm ci` reports that no lockfile exists, use `npm install` instead.
 
 ## 3. Configure secrets
 
