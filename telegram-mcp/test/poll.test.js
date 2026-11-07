@@ -141,9 +141,9 @@ test("collects all invoice details in one message, calculates totals and creates
   ].join("\n");
   assert.equal((await send(form)).action, "invoice-form-review");
   const summary = deps.replies.at(-1).text;
-  assert.match(summary, /Netto: 99\\.80 EUR/);
-  assert.match(summary, /MwSt\\.: 18\\.96 EUR/);
-  assert.match(summary, /Brutto: 118\\.76 EUR/);
+  assert.match(summary, /Netto: 99\.80 EUR/);
+  assert.match(summary, /MwSt\.: 18\.96 EUR/);
+  assert.match(summary, /Brutto: 118\.76 EUR/);
   assert.equal(deps.documents.length, 0);
   assert.equal((await send("JA")).action, "invoice-created");
   assert.equal(rendered.seller, "Musterfirma GmbH");
