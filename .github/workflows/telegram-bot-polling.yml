@@ -86,6 +86,46 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Verify Notion data-source access and invoice schema
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const url = "https://api.notion.com/v1/data_sources/" + encodeURIComponent(process.env.NOTION_DATA_SOURCE_ID);
+          const response = await fetch(url, {
+            headers: {
+              Authorization: "Bearer " + process.env.NOTION_API_KEY,
+              "Notion-Version": "2026-03-11"
+            },
+            signal: AbortSignal.timeout(20000)
+          });
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error("Notion access check failed: HTTP " + response.status + " (" + (error.code || "unknown") + ")");
+          }
+          const dataSource = await response.json();
+          const expected = {
+            "Invoice": "title",
+            "Invoice number": "rich_text",
+            "Original invoice number": "rich_text",
+            "Document type": "select",
+            "Customer": "rich_text",
+            "Customer email": "email",
+            "Invoice date": "date",
+            "Due date": "date",
+            "Net amount": "number",
+            "Tax rate %": "number",
+            "Gross amount": "number",
+            "Status": "select",
+            "Mahnung level": "select",
+            "Notes": "rich_text"
+          };
+          const mismatches = Object.entries(expected).filter(([name, type]) => dataSource.properties?.[name]?.type !== type);
+          if (mismatches.length) {
+            throw new Error("Notion schema mismatch: " + mismatches.map(([name, type]) => name + " must be " + type).join("; "));
+          }
+          console.log("Notion data-source access verified; all " + Object.keys(expected).length + " required invoice properties match.");
+          NODE
+
       - name: Restore Telegram update offset
         uses: actions/cache/restore@v4
         with:
