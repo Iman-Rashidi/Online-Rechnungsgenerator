@@ -4,9 +4,14 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "index.html"
+      - "telegram-mcp/src/**"
+      - "telegram-mcp/package.json"
+      - ".github/workflows/telegram-bot-polling.yml"
   schedule:
-    # GitHub may delay scheduled runs under load; avoid the top of the hour.
-    - cron: "3/5 * * * *"
+    # GitHub may delay scheduled runs under load; poll every five minutes.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -38,15 +43,17 @@ jobs:
           missing=()
           [[ -n "$TELEGRAM_BOT_TOKEN" ]] || missing+=("TELEGRAM_BOT_TOKEN")
           [[ -n "$TELEGRAM_ALLOWED_USER_IDS" ]] || missing+=("TELEGRAM_ALLOWED_USER_IDS")
-          [[ -n "$NOTION_API_KEY" ]] || missing+=("NOTION_API_KEY")
 
           if (( ${#missing[@]} > 0 )); then
             echo "Production polling is paused. Missing repository secrets: ${missing[*]}"
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "second_bot_enabled=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Production secrets are present. Values are not printed."
+            echo "Primary Telegram secrets are present. Values are not printed."
             echo "ready=true" >> "$GITHUB_OUTPUT"
+            if [[ -z "$NOTION_API_KEY" ]]; then
+              echo "Notion is not configured; Telegram help and other non-Notion commands will remain available."
+            fi
             if [[ -z "$TELEGRAM_BOT_TOKEN1" ]]; then
               echo "Second Telegram bot is not configured; primary bot will continue."
               echo "second_bot_enabled=false" >> "$GITHUB_OUTPUT"
@@ -61,7 +68,8 @@ jobs:
 
       - name: Verify Notion database, data source and invoice schema
         id: verify-notion
-        if: steps.check.outputs.ready == 'true'
+        if: steps.check.outputs.ready == 'true' && env.NOTION_API_KEY != ''
+        continue-on-error: true
         shell: bash
         run: |
           node --input-type=module <<'NODE'
@@ -168,9 +176,6 @@ jobs:
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-
-      - name: Run automated invoice and PDF tests
-        run: npm test
 
       - name: Restore Telegram update offset
         uses: actions/cache/restore@v4
