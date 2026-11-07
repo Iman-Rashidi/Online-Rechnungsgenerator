@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { renderInvoicePdf } from "./invoice.js";
 import { getInvoiceFromNotion, saveInvoiceToNotion, updateInvoiceStatus } from "./notion.js";
 
-const HELP_TEXT = ["Rechnio ist bereit.", "", "Neue Rechnung Schritt für Schritt erstellen: /invoice", "Ich frage alle Angaben einzeln ab. Mehrere Rechnungspositionen sind möglich. Netto, MwSt. und Brutto werden automatisch berechnet.", "Abbrechen: /cancel", "", "Rechnung als bezahlt markieren: /paid RE-2026-001", "Als versendet markieren: /sent RE-2026-001", "Als überfällig markieren: /overdue RE-2026-001", "Rechnung stornieren: /cancelled RE-2026-001"].join("\n");
+const HELP_TEXT = ["Rechnio ist bereit.", "", "Neue Rechnung mit einem einzigen Nachrichtenformular erstellen: /invoice", "Füllen Sie alle Angaben in einer Nachricht aus. Mehrere Positionen sind möglich. Netto, MwSt. und Brutto werden automatisch berechnet.", "Abbrechen: /cancel", "", "Rechnung als bezahlt markieren: /paid RE-2026-001", "Als versendet markieren: /sent RE-2026-001", "Als überfällig markieren: /overdue RE-2026-001", "Rechnung stornieren: /cancelled RE-2026-001"].join("\n");
 
 function safeError(error) {
   return String(error instanceof Error ? error.message : "Unbekannter Fehler.").slice(0, 300);
@@ -101,6 +101,92 @@ function invoiceSummary(data) {
     "\n\nAntworten Sie mit JA, um die PDF-Rechnung zu erstellen, oder NEIN zum Abbrechen.";
 }
 
+const ALL_FIELDS_PROMPT = [
+  "🧾 Bitte füllen Sie alle Angaben in EINER Nachricht aus. Keine JSON-Eingabe nötig.",
+  "",
+  "Absender: Name der Person/Firma",
+  "Absenderadresse: Straße, PLZ, Ort",
+  "Kunde: Name der Person/Firma",
+  "Kundenadresse: Straße, PLZ, Ort",
+  "Rechnungsnummer: z. B. RE-2026-001",
+  "Rechnungsdatum: TT.MM.JJJJ",
+  "Fällig am: TT.MM.JJJJ",
+  "Positionen:",
+  "Beratung | 2 | 49,90",
+  "Zusatzleistung | 1 | 99,80",
+  "MwSt: 19",
+  "Layout: modern",
+  "Farbe: ozeanblau",
+  "",
+  "Jede Position in eine eigene Zeile: Beschreibung | Menge | Nettopreis pro Einheit.",
+  "MwSt: 19, 7, 0 oder keine. Layout: klassisch, modern oder kompakt.",
+  "Farbe: ozeanblau, waldgrün, violett oder schiefergrau.",
+  "Sie können die Beispielwerte einfach überschreiben oder eine nicht benötigte zweite Position löschen.",
+  "",
+  "Abbrechen: /cancel"
+].join("\\n");
+
+function parseAllInvoiceFields(input) {
+  const labels = {
+    "absender": "seller", "absenderadresse": "sellerAddress",
+    "kunde": "customer", "kundenadresse": "customerAddress",
+    "rechnungsnummer": "number", "rechnungsdatum": "date",
+    "fällig am": "due", "faellig am": "due", "fälligkeitsdatum": "due",
+    "mwst": "taxRate", "layout": "template", "farbe": "colorTheme"
+  };
+  const values = {};
+  const items = [];
+  let inItems = false;
+  for (const rawLine of input.split(/\\r?\\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (/^positionen\\s*:?$/i.test(line)) { inItems = true; continue; }
+    const labelMatch = /^([^:]+):\\s*(.*)$/.exec(line);
+    if (labelMatch) {
+      const label = labelMatch[1].trim().toLowerCase();
+      if (labels[label]) {
+        values[labels[label]] = labelMatch[2].trim();
+        inItems = false;
+        continue;
+      }
+    }
+    if (inItems) {
+      const parts = line.split("|").map(part => part.trim());
+      if (parts.length === 3 && parts[0]) {
+        const quantity = Number(parts[1].replace(",", "."));
+        const unitPrice = Number(parts[2].replace(",", "."));
+        if (Number.isFinite(quantity) && quantity > 0 && quantity <= 10000 &&
+            Number.isFinite(unitPrice) && unitPrice > 0) {
+          items.push({ description: parts[0], quantity, unitPrice });
+        } else {
+          return { error: "Bitte prüfen Sie eine Position. Das Format lautet: Beschreibung | Menge | Nettopreis, zum Beispiel Beratung | 2 | 49,90." };
+        }
+      } else {
+        return { error: "Eine Position muss so aussehen: Beschreibung | Menge | Nettopreis, zum Beispiel Beratung | 2 | 49,90." };
+      }
+    }
+  }
+  const required = ["seller", "sellerAddress", "customer", "customerAddress", "number", "date", "due", "taxRate", "template", "colorTheme"];
+  const missing = required.filter(key => !values[key]);
+  if (missing.length || items.length === 0) {
+    return { error: "Es fehlen Angaben: " + missing.join(", ") + (items.length === 0 ? (missing.length ? " und " : "") + "mindestens eine Rechnungsposition" : "") + ". Bitte senden Sie das vollständige Formular noch einmal." };
+  }
+  const date = germanDate(values.date);
+  const due = germanDate(values.due);
+  if (!date || !due) return { error: "Bitte geben Sie Rechnungsdatum und Fälligkeit im Format TT.MM.JJJJ ein." };
+  if (due < date) return { error: "Das Fälligkeitsdatum darf nicht vor dem Rechnungsdatum liegen." };
+  const taxText = values.taxRate.toLowerCase().replace("%", "").trim();
+  const taxRate = taxText === "keine" ? "none" : taxText;
+  if (!["19", "7", "0", "none"].includes(taxRate)) return { error: "MwSt muss 19, 7, 0 oder keine sein." };
+  const templates = { "klassisch": "classic", "classic": "classic", "modern": "modern", "kompakt": "compact", "compact": "compact" };
+  const template = templates[values.template.toLowerCase()];
+  if (!template) return { error: "Layout muss klassisch, modern oder kompakt sein." };
+  const colors = { "ozeanblau": "ocean", "ocean": "ocean", "waldgrün": "forest", "waldgruen": "forest", "forest": "forest", "violett": "violet", "violet": "violet", "schiefergrau": "charcoal", "charcoal": "charcoal" };
+  const colorTheme = colors[values.colorTheme.toLowerCase()];
+  if (!colorTheme) return { error: "Farbe muss ozeanblau, waldgrün, violett oder schiefergrau sein." };
+  return { data: { seller: values.seller, sellerAddress: values.sellerAddress, customer: values.customer, customerAddress: values.customerAddress, number: values.number, date, due, items, taxRate, template, colorTheme } };
+}
+
 function nextWizardPrompt(flow) {
   if (flow.step === "quantity") return "Wie viele Einheiten?";
   if (flow.step === "unitPrice") return "Wie hoch ist der Nettopreis pro Einheit in EUR? Beispiel: 49,90";
@@ -133,6 +219,19 @@ async function handleInvoiceWizard(chatId, text, deps) {
   if (input.startsWith("/")) {
     await deps.reply(chatId, "Bitte beantworten Sie die aktuelle Frage oder senden Sie /cancel zum Abbrechen.\n\n" + nextWizardPrompt(flow));
     return { handled: true, action: "invoice-wizard-prompt" };
+  }
+
+  if (flow.step === "all-fields") {
+    const parsed = parseAllInvoiceFields(input);
+    if (parsed.error) {
+      await deps.reply(chatId, parsed.error + "\\n\\nBitte senden Sie das vollständige Formular noch einmal. /cancel bricht ab.");
+      return { handled: true, action: "invoice-wizard-invalid" };
+    }
+    flow.data = parsed.data;
+    flow.awaitingConfirmation = true;
+    delete flow.step;
+    await deps.reply(chatId, invoiceSummary(flow.data));
+    return { handled: true, action: "invoice-form-review" };
   }
 
   if (flow.awaitingConfirmation) {
@@ -283,7 +382,7 @@ export async function handleTelegramUpdate(update, deps) {
       return { handled: true, action: "status", status };
     }
     if (/^\/invoice(?:@[A-Za-z0-9_]+)?(?:\s|$)/i.test(command)) {
-      await deps.reply(chat.id, "Bitte starten Sie die Rechnungserstellung nur mit /invoice. Danach stelle ich Ihnen alle Fragen einzeln.");
+      await deps.reply(chat.id, "Bitte starten Sie die Rechnungserstellung nur mit /invoice. Danach erhalten Sie ein Formular mit allen Angaben auf einmal.");
       return { handled: true, action: "invoice-command-format" };
     }
     await deps.reply(chat.id, "Für Hilfe senden Sie /help.");
