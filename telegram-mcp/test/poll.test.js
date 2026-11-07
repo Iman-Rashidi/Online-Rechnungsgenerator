@@ -38,7 +38,7 @@ test("sends German help for /start and /help", async () => {
   assert.match(deps.replies[0].text, /Rechnung als bezahlt markieren/);
 });
 
-test("does not accept JSON and instructs users to use the step-by-step wizard", async () => {
+test("does not accept JSON and explains the single-message form", async () => {
   const deps = makeDeps({ conversations: {} });
   const result = await handleTelegramUpdate(message('/invoice {"number":"RE-TEST-001"}'), deps);
   assert.equal(result.action, "invoice-command-format");
@@ -88,7 +88,7 @@ test("polling checks the webhook, processes updates, and persists the next offse
 });
 
 
-test("collects invoice details one question at a time, supports multiple items and confirms before PDF creation", async () => {
+test("collects all invoice details in one message, supports multiple items and confirms before PDF creation", async () => {
   let rendered;
   const deps = makeDeps({
     conversations: {},
@@ -98,31 +98,25 @@ test("collects invoice details one question at a time, supports multiple items a
     }
   });
   const send = text => handleTelegramUpdate(message(text), deps);
-  const answers = [
-    ["/invoice", /Name des Rechnungsausstellers/],
-    ["Musterfirma GmbH", /vollständige Adresse des Rechnungsausstellers/],
-    ["Musterstraße 1, 50667 Köln", /Name des Kunden/],
-    ["Beispielkunde GmbH", /vollständige Adresse des Kunden/],
-    ["Kundenweg 2, 50668 Köln", /Rechnungsnummer/],
-    ["RE-2026-TEST-001", /Rechnungsdatum/],
-    ["07.11.2026", /Rechnung fällig/],
-    ["21.11.2026", /erste Position/],
-    ["Beratung", /Wie viele Einheiten/],
-    ["2", /Nettopreis pro Einheit/],
-    ["49,90", /weitere Rechnungsposition/],
-    ["JA", /erste Position/],
-    ["Zusatzleistung", /Wie viele Einheiten/],
-    ["1", /Nettopreis pro Einheit/],
-    ["99,80", /weitere Rechnungsposition/],
-    ["NEIN", /Umsatzsteuersatz/],
-    ["19", /PDF-Layout/],
-    ["modern", /Welche Farbe/],
-    ["ozeanblau", /Bitte prüfen Sie Ihre Rechnung/]
-  ];
-  for (const [answer, expected] of answers) {
-    await send(answer);
-    assert.match(deps.replies.at(-1).text, expected);
-  }
+  assert.equal((await send("/invoice")).action, "invoice-form-start");
+  assert.match(deps.replies.at(-1).text, /Absenderadresse:/);
+  assert.match(deps.replies.at(-1).text, /Positionen:/);
+  const form = [
+    "Absender: Musterfirma GmbH",
+    "Absenderadresse: Musterstraße 1, 50667 Köln",
+    "Kunde: Beispielkunde GmbH",
+    "Kundenadresse: Kundenweg 2, 50668 Köln",
+    "Rechnungsnummer: RE-2026-TEST-001",
+    "Rechnungsdatum: 07.11.2026",
+    "Fällig am: 21.11.2026",
+    "Positionen:",
+    "Beratung | 2 | 49,90",
+    "Zusatzleistung | 1 | 99,80",
+    "MwSt: 19",
+    "Layout: modern",
+    "Farbe: ozeanblau"
+  ].join("\n");
+  assert.equal((await send(form)).action, "invoice-form-review");
   const summary = deps.replies.at(-1).text;
   assert.match(summary, /Netto: 199\.60 EUR/);
   assert.match(summary, /MwSt\.: 37\.92 EUR/);
@@ -141,7 +135,22 @@ test("collects invoice details one question at a time, supports multiple items a
   assert.equal(Object.keys(deps.conversations).length, 0);
 });
 
-test("persists the step-by-step invoice wizard across polling runs", async () => {
+test("validates the complete one-message form and rejects invalid positions", async () => {
+  const deps = makeDeps({ conversations: {} });
+  const send = text => handleTelegramUpdate(message(text), deps);
+  await send("/invoice");
+  const invalid = await send([
+    "Absender: Test GmbH", "Absenderadresse: Teststraße 1", "Kunde: Kunde",
+    "Kundenadresse: Kundenstraße 2", "Rechnungsnummer: RE-1",
+    "Rechnungsdatum: 07.11.2026", "Fällig am: 21.11.2026",
+    "Positionen:", "Dienstleistung | 0 | 20,00",
+    "MwSt: 19", "Layout: modern", "Farbe: ozeanblau"
+  ].join("\n"));
+  assert.equal(invalid.action, "invoice-wizard-invalid");
+  assert.match(deps.replies.at(-1).text, /Position/);
+  assert.equal(deps.documents.length, 0);
+});
+test("persists the one-message invoice form across polling runs", async () => {
   const stateFile = "./data/poll-first-run-state.json";
   const sentMessages = [];
   const updates = [
@@ -174,8 +183,7 @@ test("persists the step-by-step invoice wizard across polling runs", async () =>
   assert.equal(sentMessages.length, 2);
   const { readFile, unlink } = await import("node:fs/promises");
   const saved = JSON.parse(await readFile(stateFile, "utf8"));
-  assert.equal(saved.conversations["987"].step, "sellerAddress");
-  assert.equal(saved.conversations["987"].data.seller, "Musterfirma GmbH");
+  assert.equal(saved.conversations["987"].step, "all-fields");
   await unlink(stateFile);
 });
 
