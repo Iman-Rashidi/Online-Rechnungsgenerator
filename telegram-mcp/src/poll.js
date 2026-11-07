@@ -162,6 +162,10 @@ async function handleInvoiceWizard(chatId, text, deps) {
         await deps.reply(chatId, "Bitte verwenden Sie das Datumsformat TT.MM.JJJJ, zum Beispiel 07.11.2026.");
         return { handled: true, action: "invoice-wizard-invalid" };
       }
+      if (field === "due" && flow.data.date && date < flow.data.date) {
+        await deps.reply(chatId, "Das Fälligkeitsdatum darf nicht vor dem Rechnungsdatum liegen. Bitte geben Sie ein späteres Datum ein.");
+        return { handled: true, action: "invoice-wizard-invalid" };
+      }
       flow.data[field] = date;
     } else if (field === "description") {
       flow.item.description = value;
