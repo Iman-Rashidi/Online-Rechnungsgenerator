@@ -260,6 +260,8 @@ export async function runPolling(options = {}) {
 
   const stateFile = resolve(options.stateFile || env.STATE_FILE || "./data/telegram-updates.json");
   const state = await readState(stateFile);
+  // Keep wizard state in the object that is persisted between scheduled polling runs.
+  state.conversations ||= {};
   const api = (method, payload) => (options.telegramRequest || telegramApi)(token, method, payload);
   const webhookInfo = await api("getWebhookInfo", {});
   if (webhookInfo?.url) throw new Error("Für diesen Bot ist noch ein Webhook aktiv. Der Polling-Modus kann nicht gleichzeitig mit einem Webhook laufen.");
