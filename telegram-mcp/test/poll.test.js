@@ -249,3 +249,28 @@ test("rejects invalid dates and invalid quantities in the one-message form", asy
   assert.match(deps.replies.at(-1).text, /Position/);
   assert.equal(deps.documents.length, 0);
 });
+
+
+test("accepts a complete invoice form even when /invoice was not sent first", async () => {
+  const deps = makeDeps({ conversations: {} });
+  const form = [
+    "Absender: Max Mustermann",
+    "Absenderadresse: Musterstraße 12, 41747 Viersen",
+    "Kunde: Anna Schmidt",
+    "Kundenadresse: Hauptstraße 25, 41061 Mönchengladbach",
+    "Rechnungsnummer: RE-2026-001",
+    "Rechnungsdatum: 07.11.2026",
+    "Fällig am: 21.11.2026",
+    "Positionen:",
+    "Webdesign | 2 | 49,90",
+    "Logo-Erstellung | 1 | 99,80",
+    "MwSt: 19",
+    "Layout: modern",
+    "Farbe: ozeanblau"
+  ].join("\\n");
+  const result = await handleTelegramUpdate(message(form), deps);
+  assert.equal(result.action, "invoice-form-review");
+  assert.match(deps.replies.at(-1).text, /Brutto:/);
+  assert.match(deps.replies.at(-1).text, /JA/);
+  assert.equal(deps.documents.length, 0);
+});
