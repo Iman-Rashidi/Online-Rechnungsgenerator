@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ready: ${{ steps.check.outputs.ready }}
+      second_bot_enabled: ${{ steps.check.outputs.second_bot_enabled }}
       data_source_id: ${{ steps.verify-notion.outputs.data_source_id }}
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -42,16 +43,20 @@ jobs:
           if (( ${#missing[@]} > 0 )); then
             echo "Production polling is paused. Missing repository secrets: ${missing[*]}"
             echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "second_bot_enabled=false" >> "$GITHUB_OUTPUT"
           else
-            if [[ -n "$TELEGRAM_BOT_TOKEN1" && "$TELEGRAM_BOT_TOKEN1" == "$TELEGRAM_BOT_TOKEN" ]]; then
-              echo "TELEGRAM_BOT_TOKEN1 must contain a different bot token."
-              exit 1
-            fi
-            if [[ -n "$TELEGRAM_BOT_TOKEN1" ]]; then
-              echo "A second Telegram bot is configured. Token value is not printed."
-            fi
             echo "Production secrets are present. Values are not printed."
             echo "ready=true" >> "$GITHUB_OUTPUT"
+            if [[ -z "$TELEGRAM_BOT_TOKEN1" ]]; then
+              echo "Second Telegram bot is not configured; primary bot will continue."
+              echo "second_bot_enabled=false" >> "$GITHUB_OUTPUT"
+            elif [[ "$TELEGRAM_BOT_TOKEN1" == "$TELEGRAM_BOT_TOKEN" ]]; then
+              echo "Second Telegram bot is disabled because TELEGRAM_BOT_TOKEN1 matches the primary bot token. Primary polling will continue."
+              echo "second_bot_enabled=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "A distinct second Telegram bot is configured. Token value is not printed."
+              echo "second_bot_enabled=true" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Verify Notion database, data source and invoice schema
@@ -176,7 +181,7 @@ jobs:
         run: node src/poll.js
 
       - name: Run second Telegram bot polling cycle
-        if: ${{ env.TELEGRAM_BOT_TOKEN1 != '' }}
+        if: needs.check-config.outputs.second_bot_enabled == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN1 }}
           STATE_FILE: data/telegram-updates-bot-2.json
