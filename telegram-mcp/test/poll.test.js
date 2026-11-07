@@ -114,30 +114,53 @@ test("polling checks the webhook, processes updates, and persists the next offse
 });
 
 
-test("creates an invoice through the German step-by-step wizard without JSON", async () => {
+test("collects all invoice details in one message, calculates totals and creates the PDF after confirmation", async () => {
   let rendered;
   const deps = makeDeps({
     conversations: {},
     renderInvoicePdf: async payload => {
       rendered = payload;
-      return { pdf: Buffer.from("%PDF-demo"), totals: { net: 49.9, tax: 9.48, gross: 59.38 } };
+      return { pdf: Buffer.from("%PDF-demo"), totals: { net: 99.8, tax: 18.96, gross: 118.76 } };
     }
   });
   const send = text => handleTelegramUpdate(message(text), deps);
-  assert.equal((await send("/invoice")).action, "invoice-wizard-start");
-  for (const answer of [
-    "Musterfirma GmbH", "Musterstraße 1, 50667 Köln",
-    "Beispielkunde GmbH", "Kundenweg 2, 50668 Köln",
-    "RE-2026-TEST-001", "07.11.2026", "21.11.2026",
-    "Beratung", "1", "49,90", "19"
-  ]) {
-    await send(answer);
-  }
-  assert.match(deps.replies.at(-1).text, /JA.*NEIN/s);
-  assert.equal((await send("JA")).action, "invoice-wizard-created");
+  assert.equal((await send("/invoice")).action, "invoice-form-start");
+  assert.match(deps.replies.at(-1).text, /EINER Nachricht/);
+  const form = [
+    "Absender: Musterfirma GmbH",
+    "Adresse Absender: Musterstraße 1, 50667 Köln",
+    "Empfänger: Beispielkunde GmbH",
+    "Adresse Empfänger: Kundenweg 2, 50668 Köln",
+    "Rechnungsnummer: RE-2026-TEST-001",
+    "Rechnungsdatum (TT.MM.JJJJ): 07.11.2026",
+    "Fälligkeitsdatum (TT.MM.JJJJ): 21.11.2026",
+    "Beschreibung: Beratung",
+    "Menge: 2",
+    "Einzelpreis EUR: 49,90",
+    "Umsatzsteuer (19, 7, 0 oder keine): 19"
+  ].join("\\n");
+  assert.equal((await send(form)).action, "invoice-form-review");
+  const summary = deps.replies.at(-1).text;
+  assert.match(summary, /Netto: 99\\.80 EUR/);
+  assert.match(summary, /MwSt\\.: 18\\.96 EUR/);
+  assert.match(summary, /Brutto: 118\\.76 EUR/);
+  assert.equal(deps.documents.length, 0);
+  assert.equal((await send("JA")).action, "invoice-created");
   assert.equal(rendered.seller, "Musterfirma GmbH");
   assert.equal(rendered.date, "2026-11-07");
+  assert.equal(rendered.items[0].quantity, 2);
   assert.equal(rendered.items[0].unitPrice, 49.9);
   assert.equal(deps.documents.length, 1);
+  assert.equal(deps.documents[0].filename, "RE-2026-TEST-001.pdf");
   assert.equal(Object.keys(deps.conversations).length, 0);
+});
+
+test("rejects an incomplete one-message invoice form without creating a PDF", async () => {
+  const deps = makeDeps({ conversations: {} });
+  const send = text => handleTelegramUpdate(message(text), deps);
+  await send("/invoice");
+  const result = await send("Absender: Test GmbH\\nRechnungsnummer: RE-1");
+  assert.equal(result.action, "invoice-form-invalid");
+  assert.match(deps.replies.at(-1).text, /fehlen noch/);
+  assert.equal(deps.documents.length, 0);
 });
