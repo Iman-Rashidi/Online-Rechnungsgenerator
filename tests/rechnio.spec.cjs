@@ -117,9 +117,13 @@ test('applies invoice color themes and places an uploaded company logo in the he
     await expect(preview).toHaveClass(new RegExp('theme-' + theme));
   }
 
-  const onePixelPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6fcAAAAASUVORK5CYII=', 'base64');
-  await page.locator('#companyLogo').setInputFiles({ name: 'company-logo.png', mimeType: 'image/png', buffer: onePixelPng });
+  // A real 2x2 RGBA PNG avoids relying on a minimal image fixture that some
+  // Chromium builds may accept as a data URL but fail to decode consistently.
+  const logoPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGMUS1nwn4GBgYGJAQoAHz4CHS4itLQAAAAASUVORK5CYII=', 'base64');
+  await page.locator('#companyLogo').setInputFiles({ name: 'company-logo.png', mimeType: 'image/png', buffer: logoPng });
+  await expect(page.locator('#logoStatus')).toHaveText('Logo erfolgreich geladen.');
   await expect(page.locator('#pCompanyLogo')).toBeVisible();
+  await expect(page.locator('#pCompanyLogo')).toHaveJSProperty('naturalWidth', 2);
   await expect(page.locator('.invoice-brandmark')).toBeHidden();
   await expect(preview).toHaveClass(/has-company-logo/);
 });
