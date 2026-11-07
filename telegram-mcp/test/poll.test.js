@@ -42,7 +42,7 @@ test("does not accept JSON and explains the single-message form", async () => {
   const deps = makeDeps({ conversations: {} });
   const result = await handleTelegramUpdate(message('/invoice {"number":"RE-TEST-001"}'), deps);
   assert.equal(result.action, "invoice-command-format");
-  assert.match(deps.replies[0].text, /alle Fragen einzeln/);
+  assert.match(deps.replies[0].text, /Formular mit allen Angaben auf einmal/);
   assert.equal(deps.documents.length, 0);
 });
 
@@ -199,7 +199,7 @@ test("rejects invalid dates and invalid quantities in the one-message form", asy
     "MwSt: 19", "Layout: modern", "Farbe: ozeanblau"
   ].join("\n"));
   assert.equal(invalidDate.action, "invoice-wizard-invalid");
-  assert.match(deps.replies.at(-1).text, /Datumsformat/);
+  assert.match(deps.replies.at(-1).text, /Format TT\\.MM\\.JJJJ/);
   const invalidQuantity = await send([
     "Absender: Test GmbH", "Absenderadresse: Teststraße 1", "Kunde: Kunde",
     "Kundenadresse: Kundenstraße 2", "Rechnungsnummer: RE-1",
