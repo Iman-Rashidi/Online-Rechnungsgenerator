@@ -155,6 +155,59 @@ test("collects all invoice details in one message, calculates totals and creates
   assert.equal(Object.keys(deps.conversations).length, 0);
 });
 
+test("persists the invoice wizard after the first polling run starts with no state file", async () => {
+  const stateFile = "./data/poll-first-run-state.json";
+  const sentMessages = [];
+  const form = [
+    "Absender: Musterfirma GmbH",
+    "Adresse Absender: Musterstraße 1, 50667 Köln",
+    "Empfänger: Beispielkunde GmbH",
+    "Adresse Empfänger: Kundenweg 2, 50668 Köln",
+    "Rechnungsnummer: RE-FIRST-RUN-001",
+    "Rechnungsdatum (TT.MM.JJJJ): 07.11.2026",
+    "Fälligkeitsdatum (TT.MM.JJJJ): 21.11.2026",
+    "Beschreibung: Beratung",
+    "Menge: 2",
+    "Einzelpreis EUR: 49,90",
+    "Umsatzsteuer (19, 7, 0 oder keine): 19"
+  ].join("\n");
+  const updates = [
+    { update_id: 50, message: { chat: { id: 987, type: "private" }, from: { id: 123456 }, text: "/invoice" } },
+    { update_id: 51, message: { chat: { id: 987, type: "private" }, from: { id: 123456 }, text: form } }
+  ];
+  const telegramRequest = async (_token, method, payload) => {
+    if (method === "getWebhookInfo") return { url: "" };
+    if (method === "getUpdates") return updates;
+    if (method === "sendMessage") {
+      sentMessages.push(payload.text);
+      return { message_id: sentMessages.length };
+    }
+    throw new Error("Unexpected Telegram method: " + method);
+  };
+  await runPolling({
+    env: {
+      TELEGRAM_BOT_TOKEN: "fake-token",
+      TELEGRAM_ALLOWED_USER_IDS: "123456",
+      NOTION_API_KEY: "fake-notion-key",
+      NOTION_DATA_SOURCE_ID: "fake-data-source"
+    },
+    stateFile,
+    telegramRequest,
+    renderInvoicePdf: async () => ({ pdf: Buffer.from("%PDF-demo"), totals: { net: 99.8, tax: 18.96, gross: 118.76 } }),
+    getInvoiceFromNotion: async () => null,
+    saveInvoiceToNotion: async () => ({ skipped: true }),
+    updateInvoiceStatus: async () => ({ skipped: true })
+  });
+  assert.equal(sentMessages.length, 2);
+  assert.match(sentMessages[0], /Rechnung erstellen/);
+  assert.match(sentMessages[1], /Brutto: 118\.76 EUR/);
+  const { readFile, unlink } = await import("node:fs/promises");
+  const saved = JSON.parse(await readFile(stateFile, "utf8"));
+  assert.equal(saved.conversations["987"].awaitingConfirmation, true);
+  assert.equal(saved.conversations["987"].data.number, "RE-FIRST-RUN-001");
+  await unlink(stateFile);
+});
+
 test("rejects an incomplete one-message invoice form without creating a PDF", async () => {
   const deps = makeDeps({ conversations: {} });
   const send = text => handleTelegramUpdate(message(text), deps);
