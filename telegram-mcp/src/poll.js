@@ -77,7 +77,7 @@ function germanDate(value) {
 }
 
 async function handleInvoiceWizard(chatId, text, deps) {
-  const conversations = deps.conversations;
+  const conversations = deps.conversations || (deps.conversations = {});
   let flow = conversations[String(chatId)];
   if (text === "/cancel") {
     delete conversations[String(chatId)];
