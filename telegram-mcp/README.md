@@ -5,41 +5,24 @@
 ## Telegram-Befehle
 
 - `/start` oder `/help`: Deutsche Hilfe anzeigen.
-- `/invoice`: Eine Rechnung Schritt für Schritt erstellen. Der Bot fragt Absender, Kunde, Rechnungsdaten, Position und Umsatzsteuer einzeln ab. JSON-Kenntnisse sind nicht erforderlich.
+- `/invoice`: Eine Rechnung vollständig im Dialog erstellen. Der Bot fragt Absender, Kunde, Rechnungsdaten, jede Rechnungsposition, Umsatzsteuer, Layout und Farbe einzeln ab. Es sind keine technischen Kenntnisse und keine JSON-Eingaben nötig.
 - `/cancel`: Eine laufende Rechnungserstellung abbrechen.
 - Nach der Zusammenfassung mit `JA` bestätigen oder mit `NEIN` abbrechen. Danach erstellt der Bot das PDF und speichert den Datensatz in Notion.
-- Fortgeschrittene Nutzer können weiterhin `/invoice {JSON}` verwenden.
 - `/paid RE-2026-001`: Rechnung als bezahlt markieren.
 - `/sent RE-2026-001`: Rechnung als versendet markieren.
 - `/overdue RE-2026-001`: Rechnung als überfällig markieren.
 - `/cancelled RE-2026-001`: Rechnung stornieren.
 
-## Beispiel für eine Testrechnung
+## Rechnung im Telegram-Dialog erstellen
 
-Nur Beispieldaten verwenden. Dies ist keine echte Rechnung und begründet keine Zahlungspflicht.
+1. Senden Sie `/invoice`.
+2. Beantworten Sie die Fragen des Bots nacheinander. Jede Antwort kommt als normale Textnachricht.
+3. Für jede Rechnungsposition geben Sie Beschreibung, Menge und Nettopreis an. Danach können Sie weitere Positionen hinzufügen.
+4. Wählen Sie Umsatzsteuersatz, PDF-Layout und Farbe.
+5. Prüfen Sie die Zusammenfassung und antworten Sie mit `JA`, um das PDF erstellen zu lassen, oder mit `NEIN`, um abzubrechen.
+6. Mit `/cancel` können Sie den Vorgang jederzeit abbrechen.
 
-```json
-/invoice {
-  "seller": "Musterfirma GmbH",
-  "email": "rechnung@example.invalid",
-  "sellerAddress": "Musterstraße 1, 50667 Köln",
-  "customer": "Beispielkunde GmbH",
-  "customerEmail": "kunde@example.invalid",
-  "customerAddress": "Kundenweg 2, 50668 Köln",
-  "number": "RE-2026-TEST-001",
-  "date": "2026-11-06",
-  "due": "2026-11-20",
-  "taxRate": "19",
-  "template": "modern",
-  "colorTheme": "ocean",
-  "documentType": "invoice",
-  "items": [
-    { "description": "Webdesign", "quantity": 2, "unitPrice": 80 }
-  ],
-  "paymentTerms": "Bitte innerhalb von 14 Tagen überweisen.",
-  "note": "Testrechnung – nicht bezahlen."
-}
-```
+Der Bot berechnet Netto, Umsatzsteuer und Brutto automatisch. Die Eingaben werden über die Polling-Läufe hinweg gespeichert, sodass Sie nicht alle Antworten innerhalb eines einzigen Bot-Laufs senden müssen. Der GitHub-Actions-Zeitplan kann Antworten um einige Minuten verzögern.
 
 ## Mahnungen
 
