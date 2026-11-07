@@ -204,6 +204,12 @@ async function handleInvoiceWizard(chatId, text, deps) {
   let flow = conversations[key];
   const input = text.trim();
 
+  // Accept a complete invoice form even if /invoice was not sent first or
+  // the short-lived wizard state was lost between scheduled polling runs.
+  if (!flow && /(?:^|\\n)\\s*Absender\\s*:/i.test(input)) {
+    flow = conversations[key] = { step: "all-fields" };
+  }
+
   if (input === "/cancel") {
     delete conversations[key];
     await deps.reply(chatId, "Die Rechnungserstellung wurde abgebrochen.");
