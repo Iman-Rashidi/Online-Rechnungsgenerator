@@ -5,7 +5,7 @@
 ## Telegram-Befehle
 
 - `/start` oder `/help`: Deutsche Hilfe anzeigen.
-- `/invoice`: Eine Rechnung vollständig im Dialog erstellen. Der Bot fragt Absender, Kunde, Rechnungsdaten, jede Rechnungsposition, Umsatzsteuer, Layout und Farbe einzeln ab. Es sind keine technischen Kenntnisse und keine JSON-Eingaben nötig.
+- `/invoice`: Eine Rechnung mit einem einzigen Nachrichtenformular erstellen. Der Bot zeigt alle Felder auf einmal an; mehrere Positionen können als einzelne Zeilen eingetragen werden. Es sind keine technischen Kenntnisse und keine JSON-Eingaben nötig.
 - `/cancel`: Eine laufende Rechnungserstellung abbrechen.
 - Nach der Zusammenfassung mit `JA` bestätigen oder mit `NEIN` abbrechen. Danach erstellt der Bot das PDF und speichert den Datensatz in Notion.
 - `/paid RE-2026-001`: Rechnung als bezahlt markieren.
@@ -16,13 +16,13 @@
 ## Rechnung im Telegram-Dialog erstellen
 
 1. Senden Sie `/invoice`.
-2. Beantworten Sie die Fragen des Bots nacheinander. Jede Antwort kommt als normale Textnachricht.
-3. Für jede Rechnungsposition geben Sie Beschreibung, Menge und Nettopreis an. Danach können Sie weitere Positionen hinzufügen.
-4. Wählen Sie Umsatzsteuersatz, PDF-Layout und Farbe.
+2. Der Bot sendet ein Formular mit allen Angaben in einer Nachricht.
+3. Tragen Sie die Werte direkt hinter den Feldnamen ein. Unter `Positionen:` kommt jede Position in eine eigene Zeile, im Format `Beschreibung | Menge | Nettopreis`.
+4. Senden Sie das ausgefüllte Formular als eine einzige Nachricht.
 5. Prüfen Sie die Zusammenfassung und antworten Sie mit `JA`, um das PDF erstellen zu lassen, oder mit `NEIN`, um abzubrechen.
 6. Mit `/cancel` können Sie den Vorgang jederzeit abbrechen.
 
-Der Bot berechnet Netto, Umsatzsteuer und Brutto automatisch. Die Eingaben werden über die Polling-Läufe hinweg gespeichert, sodass Sie nicht alle Antworten innerhalb eines einzigen Bot-Laufs senden müssen. Der GitHub-Actions-Zeitplan kann Antworten um einige Minuten verzögern.
+Der Bot berechnet Netto, Umsatzsteuer und Brutto automatisch. Das ausgefüllte Formular wird als eine Nachricht verarbeitet und der Entwurf bis zur Bestätigung über die Polling-Läufe hinweg gespeichert. Der GitHub-Actions-Zeitplan kann Antworten um einige Minuten verzögern.
 
 ## Mahnungen
 
