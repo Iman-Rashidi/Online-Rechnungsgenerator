@@ -79,22 +79,25 @@ function formatGermanDate(value) {
 }
 
 function invoiceSummary(data) {
-  const net = data.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const netCents = data.items.reduce((sum, item) => sum + Math.round(item.quantity * item.unitPrice * 100), 0);
   const rate = data.taxRate === "none" ? 0 : Number(data.taxRate);
-  const tax = net * rate / 100;
-  const gross = net + tax;
-  const positions = data.items.map((item, index) =>
-    (index + 1) + ". " + item.description + " | " + item.quantity + " × " +
-    item.unitPrice.toFixed(2) + " EUR = " + (item.quantity * item.unitPrice).toFixed(2) + " EUR"
-  ).join("\n");
+  const taxCents = Math.round(netCents * rate / 100);
+  const grossCents = netCents + taxCents;
+  const money = cents => (cents / 100).toFixed(2);
+  const positions = data.items.map((item, index) => {
+    const lineCents = Math.round(item.quantity * item.unitPrice * 100);
+    return (index + 1) + ". " + item.description + " | " + item.quantity + " × " +
+      item.unitPrice.toFixed(2) + " EUR = " + money(lineCents) + " EUR";
+  }).join("\n");
   return "🧾 Bitte prüfen Sie Ihre Rechnung:\n\n" +
     "Absender: " + data.seller + "\nAdresse: " + data.sellerAddress + "\n" +
     "Empfänger: " + data.customer + "\nAdresse: " + data.customerAddress + "\n" +
     "Rechnungsnummer: " + data.number + "\nRechnungsdatum: " + formatGermanDate(data.date) +
     "\nFälligkeitsdatum: " + formatGermanDate(data.due) + "\n\nPositionen:\n" + positions +
-    "\n\nNetto: " + net.toFixed(2) + " EUR\nMwSt.: " + tax.toFixed(2) + " EUR (" +
-    (data.taxRate === "none" ? "keine" : data.taxRate + " %") + ")\nBrutto: " + gross.toFixed(2) +
-    " EUR\n\nLayout: " + ({ classic: "klassisch", modern: "modern", compact: "kompakt" })[data.template] + "\nFarbe: " + ({ ocean: "ozeanblau", forest: "waldgrün", violet: "violett", charcoal: "schiefergrau" })[data.colorTheme] +
+    "\n\nNetto: " + money(netCents) + " EUR\nMwSt.: " + money(taxCents) + " EUR (" +
+    (data.taxRate === "none" ? "keine" : data.taxRate + " %") + ")\nBrutto: " + money(grossCents) +
+    " EUR\n\nLayout: " + ({ classic: "klassisch", modern: "modern", compact: "kompakt" })[data.template] +
+    "\nFarbe: " + ({ ocean: "ozeanblau", forest: "waldgrün", violet: "violett", charcoal: "schiefergrau" })[data.colorTheme] +
     "\n\nAntworten Sie mit JA, um die PDF-Rechnung zu erstellen, oder NEIN zum Abbrechen.";
 }
 
