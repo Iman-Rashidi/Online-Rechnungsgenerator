@@ -124,7 +124,7 @@ const ALL_FIELDS_PROMPT = [
   "Sie können die Beispielwerte einfach überschreiben oder eine nicht benötigte zweite Position löschen.",
   "",
   "Abbrechen: /cancel"
-].join("\\n");
+].join("\n");
 
 function parseAllInvoiceFields(input) {
   const labels = {
@@ -210,7 +210,7 @@ async function handleInvoiceWizard(chatId, text, deps) {
     return { handled: true, action: "invoice-cancelled" };
   }
   if (/^\/invoice(?:@\w+)?$/i.test(input)) {
-    conversations[key] = { step: "seller", data: { items: [] }, item: {} };
+    conversations[key] = { step: "all-fields" };
     await deps.reply(chatId, "🧾 Wir erstellen Ihre Rechnung Schritt für Schritt.\nSie können mehrere Positionen hinzufügen. Netto, MwSt. und Brutto berechne ich automatisch.\n\n" + nextWizardPrompt(conversations[key]) + "\n\nAbbrechen: /cancel");
     return { handled: true, action: "invoice-form-start" };
   }
