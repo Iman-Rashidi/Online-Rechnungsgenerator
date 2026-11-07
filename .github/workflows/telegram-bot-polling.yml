@@ -26,11 +26,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ready: ${{ steps.check.outputs.ready }}
-      second_bot_enabled: ${{ steps.check.outputs.second_bot_enabled }}
       data_source_id: ${{ steps.verify-notion.outputs.data_source_id }}
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_BOT_TOKEN1: ${{ secrets.TELEGRAM_BOT_TOKEN1 }}
       TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
       NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
       NOTION_DATABASE_ID: 5d59ff8e-5fc2-4445-ab81-6bfbf2f74640
@@ -47,23 +45,13 @@ jobs:
           if (( ${#missing[@]} > 0 )); then
             echo "Production polling is paused. Missing repository secrets: ${missing[*]}"
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "second_bot_enabled=false" >> "$GITHUB_OUTPUT"
           else
             echo "Primary Telegram secrets are present. Values are not printed."
             echo "ready=true" >> "$GITHUB_OUTPUT"
             if [[ -z "$NOTION_API_KEY" ]]; then
               echo "Notion is not configured; Telegram help and other non-Notion commands will remain available."
             fi
-            if [[ -z "$TELEGRAM_BOT_TOKEN1" ]]; then
-              echo "Second Telegram bot is not configured; primary bot will continue."
-              echo "second_bot_enabled=false" >> "$GITHUB_OUTPUT"
-            elif [[ "$TELEGRAM_BOT_TOKEN1" == "$TELEGRAM_BOT_TOKEN" ]]; then
-              echo "Second Telegram bot is disabled because TELEGRAM_BOT_TOKEN1 matches the primary bot token. Primary polling will continue."
-              echo "second_bot_enabled=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "A distinct second Telegram bot is configured. Token value is not printed."
-              echo "second_bot_enabled=true" >> "$GITHUB_OUTPUT"
-            fi
+            echo "Only the primary Telegram bot is enabled."
           fi
 
       - name: Verify Notion database, data source and invoice schema
@@ -144,7 +132,6 @@ jobs:
         working-directory: telegram-mcp
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_BOT_TOKEN1: ${{ secrets.TELEGRAM_BOT_TOKEN1 }}
       TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
       NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
       NOTION_DATA_SOURCE_ID: ${{ needs.check-config.outputs.data_source_id }}
@@ -186,13 +173,6 @@ jobs:
             rechnio-telegram-state-
 
       - name: Run primary Telegram bot polling cycle
-        run: node src/poll.js
-
-      - name: Run second Telegram bot polling cycle
-        if: needs.check-config.outputs.second_bot_enabled == 'true'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN1 }}
-          STATE_FILE: data/telegram-updates-bot-2.json
         run: node src/poll.js
 
       - name: Save Telegram update offsets
