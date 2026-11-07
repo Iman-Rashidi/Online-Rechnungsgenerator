@@ -334,13 +334,34 @@ $('companyLogo').addEventListener('change', async () => {
         status.textContent = 'Das Logo konnte nicht gelesen werden.';
         return;
       }
-      image.onload = () => $('invoicePreview').classList.add('has-company-logo');
-      image.onerror = () => {
+
+      let settled = false;
+      const failImage = () => {
+        if (settled || $('companyLogo').files[0] !== file) return;
+        settled = true;
         clearLogo();
         status.textContent = 'Das Logo konnte nicht angezeigt werden.';
       };
+      const showImage = () => {
+        if (settled || $('companyLogo').files[0] !== file) return;
+        if (!image.naturalWidth || !image.naturalHeight) {
+          failImage();
+          return;
+        }
+        settled = true;
+        $('invoicePreview').classList.add('has-company-logo');
+        status.textContent = 'Logo erfolgreich geladen.';
+      };
+
+      image.onload = showImage;
+      image.onerror = failImage;
       image.src = reader.result;
-      status.textContent = 'Logo erfolgreich geladen.';
+
+      // Data URLs can finish loading before the load callback is observed.
+      if (image.complete) {
+        if (image.naturalWidth > 0 && image.naturalHeight > 0) showImage();
+        else failImage();
+      }
     };
     reader.onerror = () => {
       if ($('companyLogo').files[0] !== file) return;
