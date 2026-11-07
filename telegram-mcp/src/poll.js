@@ -364,13 +364,16 @@ export async function handleTelegramUpdate(update, deps) {
   const message = update?.message;
   const chat = message?.chat;
   const sender = message?.from;
-  if (!message || chat?.type !== "private" || !sender || !deps.allowedUserIds.has(String(sender.id))) return { ignored: true };
+  if (!message) return { ignored: true, reason: "non-message" };
+  if (chat?.type !== "private") return { ignored: true, reason: "non-private" };
+  if (!sender) return { ignored: true, reason: "missing-sender" };
+  if (!deps.allowedUserIds.has(String(sender.id))) return { ignored: true, reason: "not-allowed" };
 
   const command = String(message.text || "").trim();
   try {
     const wizardResult = await handleInvoiceWizard(chat.id, command, deps);
     if (wizardResult) return wizardResult;
-    if (command === "/start" || command === "/help") {
+    if (/^\/(?:start|help)(?:@[A-Za-z0-9_]+)?$/i.test(command)) {
       await deps.reply(chat.id, HELP_TEXT);
       return { handled: true, action: "help" };
     }
@@ -414,10 +417,10 @@ export async function runPolling(options = {}) {
   const env = options.env || process.env;
   const token = String(env.TELEGRAM_BOT_TOKEN || "").trim();
   const allowedUserIds = new Set(String(env.TELEGRAM_ALLOWED_USER_IDS || "").split(",").map(value => value.trim()).filter(Boolean));
-  const notionConfigured = Boolean(String(env.NOTION_API_KEY || "").trim() && String(env.NOTION_DATA_SOURCE_ID || env.NOTION_INVOICES_DATABASE_ID || "").trim());
   if (!token) throw new Error("Das GitHub-Secret TELEGRAM_BOT_TOKEN fehlt.");
   if (allowedUserIds.size === 0) throw new Error("Das GitHub-Secret TELEGRAM_ALLOWED_USER_IDS fehlt.");
-  if (!notionConfigured) throw new Error("NOTION_API_KEY und NOTION_DATA_SOURCE_ID müssen eingerichtet sein.");
+  // Basic Telegram commands must remain available during a temporary Notion outage.
+  // The Notion adapter reports an unavailable connection when invoice storage is requested.
 
   const stateFile = resolve(options.stateFile || env.STATE_FILE || "./data/telegram-updates.json");
   const state = await readState(stateFile);
@@ -431,10 +434,21 @@ export async function runPolling(options = {}) {
     ...(state.nextOffset !== undefined ? { offset: state.nextOffset } : {}),
     limit: 100, timeout: Number.isInteger(options.pollTimeoutSeconds) ? Math.min(50, Math.max(0, options.pollTimeoutSeconds)) : 0, allowed_updates: ["message"]
   });
+  let repliesSent = 0;
+  let replyFailures = 0;
   const deps = {
     allowedUserIds,
     conversations: state.conversations,
-    reply: (chatId, text) => api("sendMessage", { chat_id: chatId, text, link_preview_options: { is_disabled: true } }),
+    reply: async (chatId, text) => {
+      try {
+        const result = await api("sendMessage", { chat_id: chatId, text, link_preview_options: { is_disabled: true } });
+        repliesSent += 1;
+        return result;
+      } catch (error) {
+        replyFailures += 1;
+        throw error;
+      }
+    },
     sendDocument: (chatId, pdf, filename, caption) => (options.sendDocument || sendTelegramDocument)(token, chatId, pdf, filename, caption),
     renderInvoicePdf: options.renderInvoicePdf || renderInvoicePdf,
     getInvoiceFromNotion: options.getInvoiceFromNotion || getInvoiceFromNotion,
@@ -442,16 +456,39 @@ export async function runPolling(options = {}) {
     updateInvoiceStatus: options.updateInvoiceStatus || updateInvoiceStatus
   };
   let handled = 0;
+  let ignoredNonMessage = 0;
+  let ignoredNonPrivate = 0;
+  let ignoredMissingSender = 0;
+  let ignoredNotAllowed = 0;
   for (const update of updates || []) {
-    await handleTelegramUpdate(update, deps);
+    const outcome = await handleTelegramUpdate(update, deps);
+    if (outcome?.ignored) {
+      if (outcome.reason === "non-message") ignoredNonMessage += 1;
+      else if (outcome.reason === "non-private") ignoredNonPrivate += 1;
+      else if (outcome.reason === "missing-sender") ignoredMissingSender += 1;
+      else if (outcome.reason === "not-allowed") ignoredNotAllowed += 1;
+    } else {
+      handled += 1;
+    }
     if (Number.isSafeInteger(update.update_id)) {
       state.nextOffset = update.update_id + 1;
       await writeState(stateFile, state);
     }
-    handled += 1;
   }
   if (state.nextOffset === undefined) await writeState(stateFile, state);
-  return { received: (updates || []).length, handled, nextOffset: state.nextOffset ?? null };
+  const ignored = ignoredNonMessage + ignoredNonPrivate + ignoredMissingSender + ignoredNotAllowed;
+  return {
+    received: (updates || []).length,
+    handled,
+    ignored,
+    ignoredNonMessage,
+    ignoredNonPrivate,
+    ignoredMissingSender,
+    ignoredNotAllowed,
+    repliesSent,
+    replyFailures,
+    nextOffset: state.nextOffset ?? null
+  };
 }
 
 const entrypoint = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : "";
