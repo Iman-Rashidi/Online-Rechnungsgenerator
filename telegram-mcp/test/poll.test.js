@@ -138,7 +138,7 @@ test("collects all invoice details in one message, calculates totals and creates
     "Menge: 2",
     "Einzelpreis EUR: 49,90",
     "Umsatzsteuer (19, 7, 0 oder keine): 19"
-  ].join("\\n");
+  ].join("\n");
   assert.equal((await send(form)).action, "invoice-form-review");
   const summary = deps.replies.at(-1).text;
   assert.match(summary, /Netto: 99\\.80 EUR/);
@@ -159,7 +159,7 @@ test("rejects an incomplete one-message invoice form without creating a PDF", as
   const deps = makeDeps({ conversations: {} });
   const send = text => handleTelegramUpdate(message(text), deps);
   await send("/invoice");
-  const result = await send("Absender: Test GmbH\\nRechnungsnummer: RE-1");
+  const result = await send("Absender: Test GmbH\nRechnungsnummer: RE-1");
   assert.equal(result.action, "invoice-form-invalid");
   assert.match(deps.replies.at(-1).text, /fehlen noch/);
   assert.equal(deps.documents.length, 0);
