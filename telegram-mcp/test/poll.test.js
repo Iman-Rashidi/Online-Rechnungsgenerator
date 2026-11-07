@@ -267,7 +267,7 @@ test("accepts a complete invoice form even when /invoice was not sent first", as
     "MwSt: 19",
     "Layout: modern",
     "Farbe: ozeanblau"
-  ].join("\\n");
+  ].join("\n");
   const result = await handleTelegramUpdate(message(form), deps);
   assert.equal(result.action, "invoice-form-review");
   assert.match(deps.replies.at(-1).text, /Brutto:/);
