@@ -21,10 +21,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ready: ${{ steps.check.outputs.ready }}
+      data_source_id: ${{ steps.check.outputs.data_source_id }}
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
       NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+      NOTION_DATABASE_ID: 5d59ff8e-5fc2-4445-ab81-6bfbf2f74640
     steps:
       - name: Check whether production secrets are configured
         id: check
@@ -56,7 +58,7 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
       NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-      NOTION_DATA_SOURCE_ID: b2685397-3058-4bde-b9ef-4e51c8d63aa2
+      NOTION_DATA_SOURCE_ID: ${{ needs.check-config.outputs.data_source_id }}
       STATE_FILE: data/telegram-updates.json
 
     steps:
@@ -104,13 +106,28 @@ jobs:
           }
           const identity = await identityResponse.json();
           console.log("Authenticated Notion integration: " + (identity.name || "unnamed") + " (" + (identity.type || "unknown type") + ")");
-          const url = "https://api.notion.com/v1/data_sources/" + encodeURIComponent(process.env.NOTION_DATA_SOURCE_ID);
-          const response = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
-          if (!response.ok) {
-            const error = await response.json().catch(() => ({}));
-            throw new Error("Notion data-source access failed: HTTP " + response.status + " (" + (error.code || "unknown") + "). Confirm that this exact integration is connected to the invoice database.");
+          const databaseUrl = "https://api.notion.com/v1/databases/" + encodeURIComponent(process.env.NOTION_DATABASE_ID);
+          const databaseResponse = await fetch(databaseUrl, { headers, signal: AbortSignal.timeout(20000) });
+          if (!databaseResponse.ok) {
+            const error = await databaseResponse.json().catch(() => ({}));
+            throw new Error("Notion invoice database is not accessible to this integration: HTTP " + databaseResponse.status + " (" + (error.code || "unknown") + "). The exact Rechnung Bot connection must be added to the invoice database or its parent page.");
           }
-          const dataSource = await response.json();
+          const database = await databaseResponse.json();
+          const dataSource = (database.data_sources || []).find(source => source.name === "فاکتورها و Mahnung");
+          if (!dataSource?.id) {
+            throw new Error("The invoice database is accessible, but the data source 'فاکتورها و Mahnung' was not returned. Check the database data source.");
+          }
+          console.log("Notion database access verified. Using its current invoice data source.");
+          const schemaUrl = "https://api.notion.com/v1/data_sources/" + encodeURIComponent(dataSource.id);
+          const schemaResponse = await fetch(schemaUrl, { headers, signal: AbortSignal.timeout(20000) });
+          if (!schemaResponse.ok) {
+            const error = await schemaResponse.json().catch(() => ({}));
+            throw new Error("Notion invoice data source is not accessible: HTTP " + schemaResponse.status + " (" + (error.code || "unknown") + ").");
+          }
+          const invoiceDataSource = await schemaResponse.json();
+          await import("node:fs/promises").then(({ appendFile }) =>
+            appendFile(process.env.GITHUB_OUTPUT, "data_source_id=" + dataSource.id + "\\n")
+          );
           const expected = {
             "Invoice": "title",
             "Invoice number": "rich_text",
@@ -127,7 +144,7 @@ jobs:
             "Mahnung level": "select",
             "Notes": "rich_text"
           };
-          const mismatches = Object.entries(expected).filter(([name, type]) => dataSource.properties?.[name]?.type !== type);
+          const mismatches = Object.entries(expected).filter(([name, type]) => invoiceDataSource.properties?.[name]?.type !== type);
           if (mismatches.length) {
             throw new Error("Notion schema mismatch: " + mismatches.map(([name, type]) => name + " must be " + type).join("; "));
           }
