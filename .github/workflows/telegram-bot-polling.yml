@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ready: ${{ steps.check.outputs.ready }}
-      data_source_id: ${{ steps.check.outputs.data_source_id }}
+      data_source_id: ${{ steps.verify-notion.outputs.data_source_id }}
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
@@ -45,6 +45,73 @@ jobs:
             echo "Production secrets are present. Values are not printed."
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Verify Notion database, data source and invoice schema
+        id: verify-notion
+        if: steps.check.outputs.ready == 'true'
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const headers = {
+            Authorization: "Bearer " + process.env.NOTION_API_KEY,
+            "Notion-Version": "2026-03-11"
+          };
+          const identityResponse = await fetch("https://api.notion.com/v1/users/me", {
+            headers, signal: AbortSignal.timeout(20000)
+          });
+          if (!identityResponse.ok) {
+            const error = await identityResponse.json().catch(() => ({}));
+            throw new Error("Notion token authentication failed: HTTP " + identityResponse.status + " (" + (error.code || "unknown") + ")");
+          }
+          const identity = await identityResponse.json();
+          console.log("Authenticated Notion integration: " + (identity.name || "unnamed") + " (" + (identity.type || "unknown type") + ")");
+          const databaseResponse = await fetch(
+            "https://api.notion.com/v1/databases/" + encodeURIComponent(process.env.NOTION_DATABASE_ID),
+            { headers, signal: AbortSignal.timeout(20000) }
+          );
+          if (!databaseResponse.ok) {
+            const error = await databaseResponse.json().catch(() => ({}));
+            throw new Error("Notion invoice database is not accessible to this integration: HTTP " + databaseResponse.status + " (" + (error.code || "unknown") + "). The Rechnung Bot integration must be connected to this database.");
+          }
+          const database = await databaseResponse.json();
+          const dataSource = (database.data_sources || []).find(source => source.name === "فاکتورها و Mahnung");
+          if (!dataSource?.id) {
+            throw new Error("The invoice database is accessible, but its 'فاکتورها و Mahnung' data source was not found.");
+          }
+          const schemaResponse = await fetch(
+            "https://api.notion.com/v1/data_sources/" + encodeURIComponent(dataSource.id),
+            { headers, signal: AbortSignal.timeout(20000) }
+          );
+          if (!schemaResponse.ok) {
+            const error = await schemaResponse.json().catch(() => ({}));
+            throw new Error("Notion invoice data source is not accessible: HTTP " + schemaResponse.status + " (" + (error.code || "unknown") + ").");
+          }
+          const invoiceDataSource = await schemaResponse.json();
+          const expected = {
+            "Invoice": "title",
+            "Invoice number": "rich_text",
+            "Original invoice number": "rich_text",
+            "Document type": "select",
+            "Customer": "rich_text",
+            "Customer email": "email",
+            "Invoice date": "date",
+            "Due date": "date",
+            "Net amount": "number",
+            "Tax rate %": "number",
+            "Gross amount": "number",
+            "Status": "select",
+            "Mahnung level": "select",
+            "Notes": "rich_text"
+          };
+          const mismatches = Object.entries(expected).filter(([name, type]) => invoiceDataSource.properties?.[name]?.type !== type);
+          if (mismatches.length) {
+            throw new Error("Notion schema mismatch: " + mismatches.map(([name, type]) => name + " must be " + type).join("; "));
+          }
+          await import("node:fs/promises").then(({ appendFile }) =>
+            appendFile(process.env.GITHUB_OUTPUT, "data_source_id=" + dataSource.id + "\n")
+          );
+          console.log("Notion database access verified; all 14 invoice properties match.");
+          NODE
 
   poll:
     needs: check-config
@@ -87,69 +154,6 @@ jobs:
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-
-      - name: Verify Notion data-source access and invoice schema
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          const headers = {
-            Authorization: "Bearer " + process.env.NOTION_API_KEY,
-            "Notion-Version": "2026-03-11"
-          };
-          const identityResponse = await fetch("https://api.notion.com/v1/users/me", {
-            headers,
-            signal: AbortSignal.timeout(20000)
-          });
-          if (!identityResponse.ok) {
-            const error = await identityResponse.json().catch(() => ({}));
-            throw new Error("Notion token authentication failed: HTTP " + identityResponse.status + " (" + (error.code || "unknown") + ")");
-          }
-          const identity = await identityResponse.json();
-          console.log("Authenticated Notion integration: " + (identity.name || "unnamed") + " (" + (identity.type || "unknown type") + ")");
-          const databaseUrl = "https://api.notion.com/v1/databases/" + encodeURIComponent(process.env.NOTION_DATABASE_ID);
-          const databaseResponse = await fetch(databaseUrl, { headers, signal: AbortSignal.timeout(20000) });
-          if (!databaseResponse.ok) {
-            const error = await databaseResponse.json().catch(() => ({}));
-            throw new Error("Notion invoice database is not accessible to this integration: HTTP " + databaseResponse.status + " (" + (error.code || "unknown") + "). The exact Rechnung Bot connection must be added to the invoice database or its parent page.");
-          }
-          const database = await databaseResponse.json();
-          const dataSource = (database.data_sources || []).find(source => source.name === "فاکتورها و Mahnung");
-          if (!dataSource?.id) {
-            throw new Error("The invoice database is accessible, but the data source 'فاکتورها و Mahnung' was not returned. Check the database data source.");
-          }
-          console.log("Notion database access verified. Using its current invoice data source.");
-          const schemaUrl = "https://api.notion.com/v1/data_sources/" + encodeURIComponent(dataSource.id);
-          const schemaResponse = await fetch(schemaUrl, { headers, signal: AbortSignal.timeout(20000) });
-          if (!schemaResponse.ok) {
-            const error = await schemaResponse.json().catch(() => ({}));
-            throw new Error("Notion invoice data source is not accessible: HTTP " + schemaResponse.status + " (" + (error.code || "unknown") + ").");
-          }
-          const invoiceDataSource = await schemaResponse.json();
-          await import("node:fs/promises").then(({ appendFile }) =>
-            appendFile(process.env.GITHUB_OUTPUT, "data_source_id=" + dataSource.id + "\\n")
-          );
-          const expected = {
-            "Invoice": "title",
-            "Invoice number": "rich_text",
-            "Original invoice number": "rich_text",
-            "Document type": "select",
-            "Customer": "rich_text",
-            "Customer email": "email",
-            "Invoice date": "date",
-            "Due date": "date",
-            "Net amount": "number",
-            "Tax rate %": "number",
-            "Gross amount": "number",
-            "Status": "select",
-            "Mahnung level": "select",
-            "Notes": "rich_text"
-          };
-          const mismatches = Object.entries(expected).filter(([name, type]) => invoiceDataSource.properties?.[name]?.type !== type);
-          if (mismatches.length) {
-            throw new Error("Notion schema mismatch: " + mismatches.map(([name, type]) => name + " must be " + type).join("; "));
-          }
-          console.log("Notion data-source access verified; all " + Object.keys(expected).length + " required invoice properties match.");
-          NODE
 
       - name: Restore Telegram update offset
         uses: actions/cache/restore@v4
