@@ -169,6 +169,9 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Run automated invoice and PDF tests
+        run: npm test
+
       - name: Restore Telegram update offset
         uses: actions/cache/restore@v4
         with:
