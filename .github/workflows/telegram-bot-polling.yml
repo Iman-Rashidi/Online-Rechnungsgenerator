@@ -90,17 +90,25 @@ jobs:
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          const url = "https://api.notion.com/v1/data_sources/" + encodeURIComponent(process.env.NOTION_DATA_SOURCE_ID);
-          const response = await fetch(url, {
-            headers: {
-              Authorization: "Bearer " + process.env.NOTION_API_KEY,
-              "Notion-Version": "2026-03-11"
-            },
+          const headers = {
+            Authorization: "Bearer " + process.env.NOTION_API_KEY,
+            "Notion-Version": "2026-03-11"
+          };
+          const identityResponse = await fetch("https://api.notion.com/v1/users/me", {
+            headers,
             signal: AbortSignal.timeout(20000)
           });
+          if (!identityResponse.ok) {
+            const error = await identityResponse.json().catch(() => ({}));
+            throw new Error("Notion token authentication failed: HTTP " + identityResponse.status + " (" + (error.code || "unknown") + ")");
+          }
+          const identity = await identityResponse.json();
+          console.log("Authenticated Notion integration: " + (identity.name || "unnamed") + " (" + (identity.type || "unknown type") + ")");
+          const url = "https://api.notion.com/v1/data_sources/" + encodeURIComponent(process.env.NOTION_DATA_SOURCE_ID);
+          const response = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
           if (!response.ok) {
             const error = await response.json().catch(() => ({}));
-            throw new Error("Notion access check failed: HTTP " + response.status + " (" + (error.code || "unknown") + ")");
+            throw new Error("Notion data-source access failed: HTTP " + response.status + " (" + (error.code || "unknown") + "). Confirm that this exact integration is connected to the invoice database.");
           }
           const dataSource = await response.json();
           const expected = {
