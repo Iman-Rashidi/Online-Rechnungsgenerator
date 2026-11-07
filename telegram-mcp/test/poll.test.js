@@ -38,38 +38,12 @@ test("sends German help for /start and /help", async () => {
   assert.match(deps.replies[0].text, /Rechnung als bezahlt markieren/);
 });
 
-test("reports malformed invoice JSON in German without rendering", async () => {
-  const deps = makeDeps();
-  const result = await handleTelegramUpdate(message("/invoice {bad json"), deps);
-  assert.equal(result.action, "invalid-json");
-  assert.match(deps.replies[0].text, /JSON-Format ist ungültig/);
-  assert.equal(deps.documents.length, 0);
-});
-
-test("creates a PDF, sends it to Telegram and records the invoice in Notion", async () => {
-  const deps = makeDeps();
+test("does not accept JSON and instructs users to use the step-by-step wizard", async () => {
+  const deps = makeDeps({ conversations: {} });
   const result = await handleTelegramUpdate(message('/invoice {"number":"RE-TEST-001"}'), deps);
-  assert.equal(result.action, "invoice");
-  assert.equal(deps.documents.length, 1);
-  assert.equal(deps.documents[0].filename, "RE-TEST-001.pdf");
-  assert.match(deps.replies.at(-1).text, /in Notion gespeichert/);
-});
-
-test("uses the stored tax rate and customer for Mahnungen", async () => {
-  const deps = makeDeps({
-    getInvoiceFromNotion: async number => {
-      assert.equal(number, "RE-ORIGINAL-001");
-      return { customer: "Musterkunde GmbH", taxRate: 7 };
-    },
-    renderInvoicePdf: async payload => {
-      assert.equal(payload.taxRate, "7");
-      assert.equal(payload.customer, "Musterkunde GmbH");
-      return { pdf: Buffer.from("%PDF-demo"), totals: { net: 100, tax: 7, gross: 107 } };
-    }
-  });
-  const result = await handleTelegramUpdate(message('/invoice {"documentType":"mahnung","originalInvoice":"RE-ORIGINAL-001","number":"MAH-001"}'), deps);
-  assert.equal(result.action, "invoice");
-  assert.equal(deps.documents.length, 1);
+  assert.equal(result.action, "invoice-command-format");
+  assert.match(deps.replies[0].text, /alle Fragen einzeln/);
+  assert.equal(deps.documents.length, 0);
 });
 
 test("updates invoice payment status using German confirmation", async () => {
@@ -114,72 +88,71 @@ test("polling checks the webhook, processes updates, and persists the next offse
 });
 
 
-test("collects all invoice details in one message, calculates totals and creates the PDF after confirmation", async () => {
+test("collects invoice details one question at a time, supports multiple items and confirms before PDF creation", async () => {
   let rendered;
   const deps = makeDeps({
     conversations: {},
     renderInvoicePdf: async payload => {
       rendered = payload;
-      return { pdf: Buffer.from("%PDF-demo"), totals: { net: 99.8, tax: 18.96, gross: 118.76 } };
+      return { pdf: Buffer.from("%PDF-demo"), totals: { net: 199.6, tax: 37.92, gross: 237.52 } };
     }
   });
   const send = text => handleTelegramUpdate(message(text), deps);
-  assert.equal((await send("/invoice")).action, "invoice-form-start");
-  assert.match(deps.replies.at(-1).text, /EINER Nachricht/);
-  const form = [
-    "Absender: Musterfirma GmbH",
-    "Adresse Absender: Musterstraße 1, 50667 Köln",
-    "Empfänger: Beispielkunde GmbH",
-    "Adresse Empfänger: Kundenweg 2, 50668 Köln",
-    "Rechnungsnummer: RE-2026-TEST-001",
-    "Rechnungsdatum (TT.MM.JJJJ): 07.11.2026",
-    "Fälligkeitsdatum (TT.MM.JJJJ): 21.11.2026",
-    "Beschreibung: Beratung",
-    "Menge: 2",
-    "Einzelpreis EUR: 49,90",
-    "Umsatzsteuer (19, 7, 0 oder keine): 19"
-  ].join("\n");
-  assert.equal((await send(form)).action, "invoice-form-review");
+  const answers = [
+    ["/invoice", /Name des Rechnungsausstellers/],
+    ["Musterfirma GmbH", /vollständige Adresse des Rechnungsausstellers/],
+    ["Musterstraße 1, 50667 Köln", /Name des Kunden/],
+    ["Beispielkunde GmbH", /vollständige Adresse des Kunden/],
+    ["Kundenweg 2, 50668 Köln", /Rechnungsnummer/],
+    ["RE-2026-TEST-001", /Rechnungsdatum/],
+    ["07.11.2026", /Fälligkeitsdatum/],
+    ["21.11.2026", /erste Position/],
+    ["Beratung", /Wie viele Einheiten/],
+    ["2", /Nettopreis pro Einheit/],
+    ["49,90", /weitere Rechnungsposition/],
+    ["JA", /erste Position/],
+    ["Zusatzleistung", /Wie viele Einheiten/],
+    ["1", /Nettopreis pro Einheit/],
+    ["99,80", /weitere Rechnungsposition/],
+    ["NEIN", /Umsatzsteuersatz/],
+    ["19", /PDF-Layout/],
+    ["modern", /Welche Farbe/],
+    ["ozeanblau", /Bitte prüfen Sie Ihre Rechnung/]
+  ];
+  for (const [answer, expected] of answers) {
+    await send(answer);
+    assert.match(deps.replies.at(-1).text, expected);
+  }
   const summary = deps.replies.at(-1).text;
-  assert.match(summary, /Netto: 99\.80 EUR/);
-  assert.match(summary, /MwSt\.: 18\.96 EUR/);
-  assert.match(summary, /Brutto: 118\.76 EUR/);
+  assert.match(summary, /Netto: 199\.60 EUR/);
+  assert.match(summary, /MwSt\.: 37\.92 EUR/);
+  assert.match(summary, /Brutto: 237\.52 EUR/);
   assert.equal(deps.documents.length, 0);
   assert.equal((await send("JA")).action, "invoice-created");
   assert.equal(rendered.seller, "Musterfirma GmbH");
   assert.equal(rendered.date, "2026-11-07");
+  assert.equal(rendered.items.length, 2);
   assert.equal(rendered.items[0].quantity, 2);
   assert.equal(rendered.items[0].unitPrice, 49.9);
+  assert.equal(rendered.template, "modern");
+  assert.equal(rendered.colorTheme, "ocean");
   assert.equal(deps.documents.length, 1);
   assert.equal(deps.documents[0].filename, "RE-2026-TEST-001.pdf");
   assert.equal(Object.keys(deps.conversations).length, 0);
 });
 
-test("persists the invoice wizard after the first polling run starts with no state file", async () => {
+test("persists the step-by-step invoice wizard across polling runs", async () => {
   const stateFile = "./data/poll-first-run-state.json";
   const sentMessages = [];
-  const form = [
-    "Absender: Musterfirma GmbH",
-    "Adresse Absender: Musterstraße 1, 50667 Köln",
-    "Empfänger: Beispielkunde GmbH",
-    "Adresse Empfänger: Kundenweg 2, 50668 Köln",
-    "Rechnungsnummer: RE-FIRST-RUN-001",
-    "Rechnungsdatum (TT.MM.JJJJ): 07.11.2026",
-    "Fälligkeitsdatum (TT.MM.JJJJ): 21.11.2026",
-    "Beschreibung: Beratung",
-    "Menge: 2",
-    "Einzelpreis EUR: 49,90",
-    "Umsatzsteuer (19, 7, 0 oder keine): 19"
-  ].join("\n");
   const updates = [
     { update_id: 50, message: { chat: { id: 987, type: "private" }, from: { id: 123456 }, text: "/invoice" } },
-    { update_id: 51, message: { chat: { id: 987, type: "private" }, from: { id: 123456 }, text: form } }
+    { update_id: 51, message: { chat: { id: 987, type: "private" }, from: { id: 123456 }, text: "Musterfirma GmbH" } }
   ];
-  const telegramRequest = async (_token, method, payload) => {
+  const telegramRequest = async (_token, method) => {
     if (method === "getWebhookInfo") return { url: "" };
     if (method === "getUpdates") return updates;
     if (method === "sendMessage") {
-      sentMessages.push(payload.text);
+      sentMessages.push("sent");
       return { message_id: sentMessages.length };
     }
     throw new Error("Unexpected Telegram method: " + method);
@@ -193,27 +166,35 @@ test("persists the invoice wizard after the first polling run starts with no sta
     },
     stateFile,
     telegramRequest,
-    renderInvoicePdf: async () => ({ pdf: Buffer.from("%PDF-demo"), totals: { net: 99.8, tax: 18.96, gross: 118.76 } }),
+    renderInvoicePdf: async () => ({ pdf: Buffer.from("%PDF-demo"), totals: { net: 0, tax: 0, gross: 0 } }),
     getInvoiceFromNotion: async () => null,
     saveInvoiceToNotion: async () => ({ skipped: true }),
     updateInvoiceStatus: async () => ({ skipped: true })
   });
   assert.equal(sentMessages.length, 2);
-  assert.match(sentMessages[0], /Rechnung erstellen/);
-  assert.match(sentMessages[1], /Brutto: 118\.76 EUR/);
   const { readFile, unlink } = await import("node:fs/promises");
   const saved = JSON.parse(await readFile(stateFile, "utf8"));
-  assert.equal(saved.conversations["987"].awaitingConfirmation, true);
-  assert.equal(saved.conversations["987"].data.number, "RE-FIRST-RUN-001");
+  assert.equal(saved.conversations["987"].step, "sellerAddress");
+  assert.equal(saved.conversations["987"].data.seller, "Musterfirma GmbH");
   await unlink(stateFile);
 });
 
-test("rejects an incomplete one-message invoice form without creating a PDF", async () => {
+test("rejects invalid dates, quantities and tax rates without creating a PDF", async () => {
   const deps = makeDeps({ conversations: {} });
   const send = text => handleTelegramUpdate(message(text), deps);
   await send("/invoice");
-  const result = await send("Absender: Test GmbH\nRechnungsnummer: RE-1");
-  assert.equal(result.action, "invoice-form-invalid");
-  assert.match(deps.replies.at(-1).text, /fehlen noch/);
+  await send("Test GmbH");
+  await send("Teststraße 1");
+  await send("Kunde");
+  await send("Kundenstraße 2");
+  await send("RE-1");
+  const invalidDate = await send("31.02.2026");
+  assert.equal(invalidDate.action, "invoice-wizard-invalid");
+  assert.match(deps.replies.at(-1).text, /Datumsformat/);
+  await send("07.11.2026");
+  await send("21.11.2026");
+  await send("Dienstleistung");
+  const invalidQuantity = await send("0");
+  assert.equal(invalidQuantity.action, "invoice-wizard-invalid");
   assert.equal(deps.documents.length, 0);
 });
