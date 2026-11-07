@@ -137,11 +137,11 @@ function parseAllInvoiceFields(input) {
   const values = {};
   const items = [];
   let inItems = false;
-  for (const rawLine of input.split(/\\r?\\n/)) {
+  for (const rawLine of input.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
-    if (/^positionen\\s*:?$/i.test(line)) { inItems = true; continue; }
-    const labelMatch = /^([^:]+):\\s*(.*)$/.exec(line);
+    if (/^positionen\s*:?$/i.test(line)) { inItems = true; continue; }
+    const labelMatch = /^([^:]+):\s*(.*)$/.exec(line);
     if (labelMatch) {
       const label = labelMatch[1].trim().toLowerCase();
       if (labels[label]) {
@@ -211,7 +211,7 @@ async function handleInvoiceWizard(chatId, text, deps) {
   }
   if (/^\/invoice(?:@\w+)?$/i.test(input)) {
     conversations[key] = { step: "all-fields" };
-    await deps.reply(chatId, "🧾 Wir erstellen Ihre Rechnung Schritt für Schritt.\nSie können mehrere Positionen hinzufügen. Netto, MwSt. und Brutto berechne ich automatisch.\n\n" + nextWizardPrompt(conversations[key]) + "\n\nAbbrechen: /cancel");
+    await deps.reply(chatId, ALL_FIELDS_PROMPT);
     return { handled: true, action: "invoice-form-start" };
   }
   if (!flow) return null;
@@ -224,7 +224,7 @@ async function handleInvoiceWizard(chatId, text, deps) {
   if (flow.step === "all-fields") {
     const parsed = parseAllInvoiceFields(input);
     if (parsed.error) {
-      await deps.reply(chatId, parsed.error + "\\n\\nBitte senden Sie das vollständige Formular noch einmal. /cancel bricht ab.");
+      await deps.reply(chatId, parsed.error + "\n\nBitte senden Sie das vollständige Formular noch einmal. /cancel bricht ab.");
       return { handled: true, action: "invoice-wizard-invalid" };
     }
     flow.data = parsed.data;
