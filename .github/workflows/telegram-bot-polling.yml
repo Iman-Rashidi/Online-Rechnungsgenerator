@@ -147,7 +147,7 @@ jobs:
           node-version: 22
 
       - name: Cache npm dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.npm
           key: rechnio-telegram-npm-${{ runner.os }}-${{ hashFiles('telegram-mcp/package.json') }}
@@ -156,7 +156,7 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Cache Playwright Chromium
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: rechnio-playwright-${{ runner.os }}-chromium-${{ hashFiles('telegram-mcp/package.json') }}
@@ -165,7 +165,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Restore Telegram update offset
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: telegram-mcp/data
           key: rechnio-telegram-state-${{ github.run_id }}
@@ -177,7 +177,7 @@ jobs:
 
       - name: Save Telegram update offsets
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: telegram-mcp/data
           key: rechnio-telegram-state-${{ github.run_id }}
